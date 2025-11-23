@@ -1,47 +1,52 @@
-// pages/api/create-seller.js
+// frontend/pages/api/create-seller.js
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-  if (!SERVICE_ROLE_KEY) {
-    console.error('Service role key missing')
-    return res.status(500).json({ error: 'Service role key missing' })
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // require service key on server
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error('Missing SUPABASE_SERVICE_KEY or URL in env')
+    return res.status(500).json({ error: 'Server misconfigured' })
   }
 
-  // Create admin Supabase client using service role key (server-only)
-  const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+  const supabaseServer = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
   try {
     const body = req.body || {}
-    const { user_id: authUserId, shop_name } = body
+    // expect user_id (uuid string) and shop_name
+    const { user_id, shop_name } = body
 
-    if (!authUserId) {
-      return res.status(400).json({ error: 'user_id required' })
+    if (!user_id || !shop_name) {
+      return res.status(400).json({ error: 'Missing user_id or shop_name' })
     }
 
-    // Ensure profile exists (optional): try upsert profile from auth (fetch auth user)
-    // We trust authUserId is the uuid from client (obtained from supabase.auth.getUser())
-
-    // Create seller row referencing profiles.id (authUserId)
-    const { data, error } = await supabaseAdmin
+    // Confirm there's not already a seller for this user
+    const { data: existing, error: e1 } = await supabaseServer
       .from('sellers')
-      .insert([{ auth_user_id: authUserId, shop_name }])
+      .select('*')
+      .eq('auth_user_id', user_id)
+      .limit(1)
+
+    if (e1) throw e1
+    if (existing && existing.length > 0) {
+      return res.status(200).json({ message: 'Already a seller', seller: existing[0] })
+    }
+
+    // Insert seller row
+    const { data, error } = await supabaseServer
+      .from('sellers')
+      .insert([{ auth_user_id: user_id, shop_name }])
       .select()
       .single()
 
-    if (error) {
-      console.error('create-seller error', error)
-      return res.status(500).json({ error: error.message })
-    }
-
-    return res.status(200).json({ message: 'Seller created', seller: data })
+    if (error) throw error
+    return res.status(201).json({ message: 'Seller created', seller: data })
   } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Unexpected server error' })
+    console.error('create-seller error', err)
+    return res.status(500).json({ error: err.message || 'Unknown error' })
   }
 }
