@@ -1,72 +1,65 @@
+// frontend/pages/auth/login.js
 import { useState } from 'react'
-import { supabase } from '../../lib/supabaseClient'
+import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/router'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 export default function LoginPage(){
   const router = useRouter()
-  const [mode,setMode] = useState('email')
-  const [email,setEmail] = useState('')
-  const [otp,setOtp] = useState('')
-  const [loading,setLoading] = useState(false)
-  const [message,setMessage] = useState('')
-  const [error,setError] = useState('')
+  const [email, setEmail] = useState('')
+  const [otp, setOtp] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
 
   const sendOtp = async (e) => {
     e?.preventDefault()
-    setLoading(true); setError(''); setMessage('')
+    setLoading(true)
+    setError('')
     try {
-      if(!email) throw new Error('Enter email')
       const { error } = await supabase.auth.signInWithOtp({ email })
       if (error) throw error
-      setMessage('OTP sent to email (check your inbox).')
+      setMessage('OTP sent to your email')
     } catch (err) {
+      console.error(err)
       setError(err.message || 'Failed to send OTP')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   const verifyOtp = async (e) => {
     e?.preventDefault()
-    setLoading(true); setError(''); setMessage('')
+    setLoading(true); setError('')
     try {
-      if(!otp) throw new Error('Enter OTP')
-      const { data, error } = await supabase.auth.verifyOtp({ token: otp, type: 'email' })
+      // verifyAuth will set a session cookie via redirect-less flow
+      const { data, error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' })
       if (error) throw error
-      setMessage('Logged in — redirecting…')
-      setTimeout(()=>router.push('/account'),700)
+      setMessage('Logged in — redirecting')
+      router.push('/account')
     } catch (err) {
-      setError(err.message || 'OTP verify failed')
-    } finally {
-      setLoading(false)
-    }
+      console.error(err)
+      setError(err.message || 'Failed to verify OTP')
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <main className="max-w-3xl mx-auto bg-[#071029] text-[#e6eef6] p-8 rounded-xl">
-        <h1 className="text-4xl font-bold mb-6">Log in / Sign up</h1>
-        <form onSubmit={sendOtp}>
-          <label className="block mb-2">Email</label>
-          <input value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 rounded" placeholder="you@example.com"/>
-          <div className="mt-4">
-            <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 rounded">Send OTP</button>
-          </div>
-        </form>
+    <div>
+      <h1>Log in / Sign up</h1>
+      <form onSubmit={sendOtp}>
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" />
+        <button type="submit">{loading ? 'Sending…' : 'Send OTP'}</button>
+      </form>
 
-        <hr className="my-6" />
+      <form onSubmit={verifyOtp}>
+        <input value={otp} onChange={e=>setOtp(e.target.value)} placeholder="OTP" />
+        <button type="submit">Verify OTP</button>
+      </form>
 
-        <form onSubmit={verifyOtp}>
-          <label className="block mb-2">Enter OTP</label>
-          <input value={otp} onChange={e=>setOtp(e.target.value)} className="w-full p-3 rounded" placeholder="Enter code"/>
-          <div className="mt-4">
-            <button type="submit" disabled={loading} className="px-4 py-2 bg-green-600 rounded">Verify OTP</button>
-          </div>
-        </form>
-
-        {message && <div className="mt-4 text-green-300">{message}</div>}
-        {error && <div className="mt-4 text-red-300">{error}</div>}
-      </main>
+      {message && <div style={{ color: 'green' }}>{message}</div>}
+      {error && <div style={{ color: 'red' }}>{error}</div>}
     </div>
   )
 }
