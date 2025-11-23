@@ -2,7 +2,12 @@
 import NavBar from '../../components/NavBar'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { supabase } from '../../lib/supabaseClient' // ensure this file exists
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 export default function AccountPage() {
   const router = useRouter()
@@ -12,121 +17,84 @@ export default function AccountPage() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      setLoading(true)
-      setError('')
       try {
-        // uses new supabase client getSession/getUser depending on installed lib
-        const { data } = await supabase.auth.getUser?.() || await supabase.auth.getSession?.()
-        // handle both shapes: new client returns { data: { user } }, older clients differ
-        const userObj = data?.user ?? (data?.session?.user ?? null)
-
-        if (!userObj) {
+        setLoading(true)
+        setError('')
+        const { data, error } = await supabase.auth.getUser()
+        if (error) throw error
+        if (!data.user) {
           router.replace('/auth/login')
           return
         }
-
-        setUser(userObj)
+        setUser(data.user)
       } catch (err) {
-        console.error('fetchUser error', err)
+        console.error(err)
         setError('Could not load account. Please try again.')
       } finally {
         setLoading(false)
       }
     }
-
     fetchUser()
   }, [router])
 
   const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      router.push('/')
-    }
+    await supabase.auth.signOut()
+    router.push('/')
   }
 
-  // becomeSeller: calls server-side API route that uses the SUPABASE_SERVICE_KEY
   const becomeSeller = async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession()
-      const userId = sessionData?.data?.session?.user?.id ?? sessionData?.user?.id
+      const accessToken = sessionData?.session?.access_token
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData?.user?.id
+      if (!accessToken || !userId) return alert('Not authenticated')
 
-      if (!userId) {
-        alert('Not logged in')
-        return
-      }
-
-      const res = await fetch('/api/create-seller', {
+      const r = await fetch('/api/create-seller', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
         body: JSON.stringify({ user_id: userId, shop_name: 'Demo Wholesale' })
       })
-
-      const json = await res.json()
-      if (!res.ok) {
-        alert(json.error || 'Failed creating seller')
+      const json = await r.json()
+      if (!r.ok) {
+        alert(json.error || json.details || 'Failed to create seller')
       } else {
         alert(json.message || 'Seller created')
-        // optionally reload or set state
       }
     } catch (err) {
-      console.error('becomeSeller error', err)
-      alert('Unexpected error: ' + (err.message || err))
+      console.error(err)
+      alert('Unexpected error')
     }
   }
 
   return (
-    <div className="account-page" style={{ padding: 20 }}>
+    <div className="account-page">
       <NavBar />
-
-      <main className="account-main" style={{ maxWidth: 900, margin: '0 auto' }}>
+      <main className="account-main">
         <div className="account-card">
           {loading && <div>Loading account…</div>}
-
           {!loading && user && (
             <>
-              <h1 className="account-title">Hi, {user.email || 'wholesale user'}</h1>
-              <p className="account-subtitle">
-                This is your basic profile from Supabase Auth. Later we can link this
-                to buyer / seller records in the main database.
-              </p>
-
+              <h1>Hi, {user.email}</h1>
               <div>
-                <div style={{ fontWeight: 700 }}>User ID</div>
-                <div style={{ marginBottom: 12 }}>
-                  <code style={{ fontSize: '0.85rem' }}>{user.id}</code>
-                </div>
-
-                <div style={{ fontWeight: 700 }}>Email</div>
-                <div style={{ marginBottom: 12 }}>{user.email || '—'}</div>
-
-                <div style={{ fontWeight: 700 }}>Phone</div>
-                <div style={{ marginBottom: 12 }}>
-                  {user.phone || 'Not set (phone OTP to be configured later)'}
-                </div>
+                <div>User ID</div>
+                <div><code>{user.id}</code></div>
+                <div>Email</div>
+                <div>{user.email}</div>
               </div>
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => router.push('/')} className="btn">Back to marketplace</button>
-                <button onClick={handleLogout} className="btn">Logout</button>
-                <button onClick={becomeSeller} className="btn primary">Become a Seller</button>
+              <div style={{ marginTop: 16 }}>
+                <button onClick={() => router.push('/')}>Back to marketplace</button>
+                <button onClick={handleLogout}>Logout</button>
+                <button onClick={becomeSeller}>Become a Seller</button>
               </div>
             </>
           )}
-
-          {!loading && !user && !error && (
-            <div>You are not logged in. Redirecting to login…</div>
-          )}
-
-          {error && <div className="auth-error" style={{ color: 'red' }}>{error}</div>}
+          {error && <div style={{ color: 'red' }}>{error}</div>}
         </div>
       </main>
-
-      <footer style={{ marginTop: 40, textAlign: 'center' }}>
-        Haullcell demo • Account data powered by Supabase Auth
-      </footer>
     </div>
   )
 }
