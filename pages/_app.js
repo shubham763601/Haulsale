@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import UserContext from '../lib/userContext'
 import { supabase } from '../lib/supabaseClient'
-import '../styles/globals.css' // keep if you have global css
+import '../styles/globals.css'
 
 function MyApp({ Component, pageProps }) {
   const [user, setUser] = useState(null)
@@ -10,26 +10,18 @@ function MyApp({ Component, pageProps }) {
   useEffect(() => {
     let mounted = true
 
-    // Get initial session (if any)
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return
       setUser(data?.session?.user ?? null)
-    }).catch(() => {
-      if (!mounted) return
-      setUser(null)
-    })
+    }).catch(()=>{})
 
-    // Subscribe to auth changes (login, logout, token refresh)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
 
     return () => {
       mounted = false
-      // unsubscribe safely
-      try {
-        listener?.subscription?.unsubscribe()
-      } catch (e) {}
+      try { listener?.subscription?.unsubscribe() } catch (e) {}
     }
   }, [])
 

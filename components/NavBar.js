@@ -16,20 +16,18 @@ export default function NavBar() {
   }
 
   return (
-    <nav style={{ display: 'flex', gap: 16, padding: 12 }}>
-      <Link href="/"><a>Marketplace</a></Link>
-      <Link href="/products"><a>Products</a></Link>
-
+    <nav className="p-4 flex items-center gap-4 bg-gray-900 text-white">
+      <Link href="/"><a className="font-bold">Haulcell</a></Link>
       <div style={{ marginLeft: 'auto' }}>
         {user ? (
           <>
-            <span style={{ marginRight: 8 }}>{user.email}</span>
-            <button onClick={() => router.push('/account')}>Account</button>
+            <span className="mr-3">{user.email}</span>
+            <button onClick={() => router.push('/account')} className="mr-2">Account</button>
             <button onClick={handleSignOut}>Sign out</button>
           </>
         ) : (
           <>
-            <button onClick={() => router.push('/auth/login')}>Sign in</button>
+            <button onClick={() => router.push('/auth/login')} className="mr-2">Sign in</button>
             <button onClick={() => router.push('/auth/signup')}>Sign up</button>
           </>
         )}

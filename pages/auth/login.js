@@ -30,11 +30,8 @@ export default function LoginPage() {
         return
       }
 
-      // Update global context (onAuthStateChange will also fire)
       const user = data?.user ?? data?.session?.user ?? null
       setUser(user)
-
-      // Redirect to home or where you want
       router.push('/')
     } catch (err) {
       setError(err.message || String(err))
@@ -45,57 +42,24 @@ export default function LoginPage() {
 
   return (
     <>
-      <Head>
-        <title>Sign in | Haullcell</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-
+      <Head><title>Sign in | Haullcell</title></Head>
       <NavBar />
-
       <main className="min-h-screen flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white/5 backdrop-blur rounded-lg p-8 shadow-md">
           <h1 className="text-2xl font-bold mb-4 text-white">Sign in</h1>
-
           <form onSubmit={handleSignIn} className="space-y-4">
-            <label className="block">
-              <span className="text-sm text-gray-300">Email</span>
-              <input
-                className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white placeholder-gray-400"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                type="email"
-                required
-              />
+            <label className="block"><span className="text-sm text-gray-300">Email</span>
+              <input className="mt-1 block w-full rounded border px-3 py-2" value={email} onChange={e => setEmail(e.target.value)} type="email" required />
             </label>
-
-            <label className="block">
-              <span className="text-sm text-gray-300">Password</span>
-              <input
-                className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white placeholder-gray-400"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                type="password"
-                required
-              />
+            <label className="block"><span className="text-sm text-gray-300">Password</span>
+              <input className="mt-1 block w-full rounded border px-3 py-2" value={password} onChange={e => setPassword(e.target.value)} type="password" required />
             </label>
-
             <div className="flex items-center justify-between">
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60"
-              >
+              <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-indigo-600">
                 {loading ? 'Signing in...' : 'Sign in'}
               </button>
-
-              <a
-                className="text-sm text-gray-300 underline hover:text-white"
-                href="/auth/signup"
-              >
-                Create account
-              </a>
+              <a href="/auth/signup" className="text-sm">Create account</a>
             </div>
-
             {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
           </form>
         </div>
