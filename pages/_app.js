@@ -1,35 +1,35 @@
-// frontend/pages/_app.js
-import { useEffect, useState, createContext } from 'react'
+// pages/_app.js
+import React, { useEffect, useState } from 'react'
+import UserContext from '../lib/userContext'
 import { supabase } from '../lib/supabaseClient'
-import '../styles/globals.css' // keep if your project uses this - adjust path if needed
-
-// Export the context so components can import it:
-export const UserContext = createContext({ user: null, setUser: () => {} })
+import '../styles/globals.css' // keep if you have global css
 
 function MyApp({ Component, pageProps }) {
   const [user, setUser] = useState(null)
 
   useEffect(() => {
-    // on mount, fetch current user (if any)
-    const init = async () => {
-      try {
-        const { data } = await supabase.auth.getUser()
-        setUser(data?.user ?? null)
-      } catch (e) {
-        console.error('getUser error', e)
-        setUser(null)
-      }
-    }
-    init()
+    let mounted = true
 
-    // subscribe to auth changes to keep UI updated
+    // Get initial session (if any)
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return
+      setUser(data?.session?.user ?? null)
+    }).catch(() => {
+      if (!mounted) return
+      setUser(null)
+    })
+
+    // Subscribe to auth changes (login, logout, token refresh)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
 
-    // cleanup
     return () => {
-      if (listener?.subscription) listener.subscription.unsubscribe()
+      mounted = false
+      // unsubscribe safely
+      try {
+        listener?.subscription?.unsubscribe()
+      } catch (e) {}
     }
   }, [])
 

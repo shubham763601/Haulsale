@@ -1,40 +1,39 @@
-// frontend/components/NavBar.js
+// components/NavBar.js
+import React, { useContext } from 'react'
 import Link from 'next/link'
-import { useContext } from 'react'
-import { UserContext } from '../pages/_app' // import the context exported by _app.js
+import UserContext from '../lib/userContext'
 import { supabase } from '../lib/supabaseClient'
+import { useRouter } from 'next/router'
 
 export default function NavBar() {
-  const { user } = useContext(UserContext)
+  const { user, setUser } = useContext(UserContext)
+  const router = useRouter()
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-      // auth state subscriber in _app will clear user
-    } catch (err) {
-      console.error('logout error', err)
-    }
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    router.push('/')
   }
 
   return (
-    <header style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <div style={{ fontWeight: 700 }}>
-        <Link href="/">Haullcell</Link>
-      </div>
+    <nav style={{ display: 'flex', gap: 16, padding: 12 }}>
+      <Link href="/"><a>Marketplace</a></Link>
+      <Link href="/products"><a>Products</a></Link>
 
-      <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Link href="/">Marketplace</Link>
-
+      <div style={{ marginLeft: 'auto' }}>
         {user ? (
           <>
-            <Link href="/account">My Account</Link>
-            <span style={{ fontSize: '0.9rem', opacity: 0.9 }}>{user.email}</span>
-            <button onClick={handleLogout} style={{ marginLeft: 8 }}>Logout</button>
+            <span style={{ marginRight: 8 }}>{user.email}</span>
+            <button onClick={() => router.push('/account')}>Account</button>
+            <button onClick={handleSignOut}>Sign out</button>
           </>
         ) : (
-          <Link href="/auth/login">Login / Sign up</Link>
+          <>
+            <button onClick={() => router.push('/auth/login')}>Sign in</button>
+            <button onClick={() => router.push('/auth/signup')}>Sign up</button>
+          </>
         )}
-      </nav>
-    </header>
+      </div>
+    </nav>
   )
 }

@@ -1,61 +1,65 @@
-// frontend/pages/auth/login.js
-import { useState } from 'react'
-// import the shared client instead
-import { supabase } from '../../lib/supabaseClient' // adjust path if needed
+// pages/auth/login.js
+import React, { useState, useContext } from 'react'
 import { useRouter } from 'next/router'
+import { supabase } from '../../lib/supabaseClient'
+import UserContext from '../../lib/userContext'
 
-export default function LoginPage(){
+export default function LoginPage() {
   const router = useRouter()
+  const { setUser } = useContext(UserContext)
   const [email, setEmail] = useState('')
-  const [otp, setOtp] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
 
-  const sendOtp = async (e) => {
-    e?.preventDefault()
+  async function handleSignIn(e) {
+    e.preventDefault()
     setLoading(true)
-    setError('')
-    try {
-      const { error } = await supabase.auth.signInWithOtp({ email })
-      if (error) throw error
-      setMessage('OTP sent to your email')
-    } catch (err) {
-      console.error(err)
-      setError(err.message || 'Failed to send OTP')
-    } finally { setLoading(false) }
-  }
+    setError(null)
 
-  const verifyOtp = async (e) => {
-    e?.preventDefault()
-    setLoading(true); setError('')
     try {
-      // verifyAuth will set a session cookie via redirect-less flow
-      const { data, error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' })
-      if (error) throw error
-      setMessage('Logged in — redirecting')
-      router.push('/account')
+      // Example: password sign-in. If you use OTP/OAuth, replace this with signInWithOtp or signInWithOAuth
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (signInError) {
+        setError(signInError.message || 'Sign in failed')
+        setLoading(false)
+        return
+      }
+
+      // data.session?.user will contain the user
+      setUser(data?.user ?? data?.session?.user ?? null)
+
+      // Redirect where you want after login
+      router.push('/')
     } catch (err) {
-      console.error(err)
-      setError(err.message || 'Failed to verify OTP')
-    } finally { setLoading(false) }
+      setError(err.message ?? String(err))
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div>
-      <h1>Log in / Sign up</h1>
-      <form onSubmit={sendOtp}>
-        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" />
-        <button type="submit">{loading ? 'Sending…' : 'Send OTP'}</button>
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: 20 }}>
+      <h1>Sign in</h1>
+      <form onSubmit={handleSignIn}>
+        <label>
+          Email
+          <input value={email} onChange={e => setEmail(e.target.value)} type="email" required />
+        </label>
+        <label>
+          Password
+          <input value={password} onChange={e => setPassword(e.target.value)} type="password" required />
+        </label>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Signing in...' : 'Sign in'}
+        </button>
       </form>
 
-      <form onSubmit={verifyOtp}>
-        <input value={otp} onChange={e=>setOtp(e.target.value)} placeholder="OTP" />
-        <button type="submit">Verify OTP</button>
-      </form>
-
-      {message && <div style={{ color: 'green' }}>{message}</div>}
-      {error && <div style={{ color: 'red' }}>{error}</div>}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   )
 }
