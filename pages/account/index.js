@@ -2,12 +2,10 @@
 import NavBar from '../../components/NavBar'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { createClient } from '@supabase/supabase-js'
+// remove createClient(...) and use:
+import { supabase } from '../../lib/supabaseClient'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+
 
 export default function AccountPage() {
   const router = useRouter()
