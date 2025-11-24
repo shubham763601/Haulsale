@@ -1,6 +1,8 @@
 // pages/auth/signup.js
+import Head from 'next/head'
 import React, { useState } from 'react'
 import { useRouter } from 'next/router'
+import NavBar from '../../components/NavBar'
 import { supabase } from '../../lib/supabaseClient'
 
 export default function SignupPage() {
@@ -8,12 +10,11 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
-  const [phase, setPhase] = useState('enter') // enter -> otp-sent -> verified -> done
+  const [phase, setPhase] = useState('enter') // enter -> otp-sent -> verified
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
 
-  // Step 1: request an OTP (server creates OTP & sends email)
   async function handleRequestOtp(e) {
     e?.preventDefault()
     setError(null)
@@ -38,7 +39,6 @@ export default function SignupPage() {
     }
   }
 
-  // Step 2: verify OTP with server; on success call supabase signUp
   async function handleVerifyAndSignup(e) {
     e?.preventDefault()
     setError(null)
@@ -47,7 +47,6 @@ export default function SignupPage() {
 
     setLoading(true)
     try {
-      // verify OTP
       const verify = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,11 +63,9 @@ export default function SignupPage() {
 
       if (signUpError) throw new Error(signUpError.message || 'Signup failed')
 
-      // At this point the user is created (and may be signed in or require email confirmation depending on your Supabase settings)
       setPhase('verified')
       setInfo('Signup successful. Redirecting...')
 
-      // Optionally create a profile row etc. If you require creating profile after signup, do it here (once user session exists)
       setTimeout(() => router.push('/'), 1200)
     } catch (err) {
       setError(err.message || String(err))
@@ -78,41 +75,86 @@ export default function SignupPage() {
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: '20px auto', padding: 20 }}>
-      <h1>Create account</h1>
+    <>
+      <Head>
+        <title>Create account | Haullcell</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-      {phase === 'enter' && (
-        <form onSubmit={handleRequestOtp}>
-          <label style={{ display: 'block', marginBottom: 8 }}>
-            Email
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-          </label>
-          <label style={{ display: 'block', marginBottom: 8 }}>
-            Create password
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-          </label>
+      <NavBar />
 
-          <button type="submit" disabled={loading}>{loading ? 'Sending OTP...' : 'Request OTP'}</button>
-        </form>
-      )}
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white/5 backdrop-blur rounded-lg p-8 shadow-md">
+          <h1 className="text-2xl font-bold mb-4 text-white">Create account</h1>
 
-      {phase === 'otp-sent' && (
-        <form onSubmit={handleVerifyAndSignup}>
-          <p>Enter the OTP sent to <strong>{email}</strong></p>
-          <label style={{ display: 'block', marginBottom: 8 }}>
-            OTP
-            <input value={otp} onChange={e => setOtp(e.target.value)} required />
-          </label>
+          {phase === 'enter' && (
+            <form onSubmit={handleRequestOtp} className="space-y-4">
+              <label className="block">
+                <span className="text-sm text-gray-300">Email</span>
+                <input
+                  className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white placeholder-gray-400"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                />
+              </label>
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" disabled={loading}>{loading ? 'Verifying...' : 'Verify & Create account'}</button>
-            <button type="button" onClick={() => setPhase('enter')}>Change email/password</button>
-          </div>
-        </form>
-      )}
+              <label className="block">
+                <span className="text-sm text-gray-300">Create password</span>
+                <input
+                  className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white placeholder-gray-400"
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                />
+              </label>
 
-      {info && <p style={{ color: 'green' }}>{info}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-    </div>
+              <div className="flex items-center justify-between">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60"
+                >
+                  {loading ? 'Sending OTP...' : 'Request OTP'}
+                </button>
+                <a className="text-sm text-gray-300 underline hover:text-white" href="/auth/login">
+                  Already have an account?
+                </a>
+              </div>
+            </form>
+          )}
+
+          {phase === 'otp-sent' && (
+            <form onSubmit={handleVerifyAndSignup} className="space-y-4">
+              <p className="text-sm text-gray-300">Enter the OTP sent to <strong className="text-white">{email}</strong></p>
+
+              <label className="block">
+                <span className="text-sm text-gray-300">OTP</span>
+                <input
+                  className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white placeholder-gray-400"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value)}
+                  required
+                />
+              </label>
+
+              <div className="flex items-center gap-3">
+                <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-60">
+                  {loading ? 'Verifying...' : 'Verify & Create account'}
+                </button>
+                <button type="button" onClick={() => setPhase('enter')} className="px-3 py-2 rounded bg-gray-700">
+                  Change email / password
+                </button>
+              </div>
+            </form>
+          )}
+
+          {info && <p className="text-green-400 text-sm mt-2">{info}</p>}
+          {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+        </div>
+      </main>
+    </>
   )
 }
