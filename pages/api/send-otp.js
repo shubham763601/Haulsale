@@ -1,7 +1,6 @@
 // pages/api/send-otp.js
 // Serverless function: create OTP in DB and send email via SendGrid
 
-import fetch from 'node-fetch'
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -38,34 +37,35 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to save OTP' })
     }
 
-    // send email via SendGrid
+    // If SendGrid is not configured, return the OTP in the response for local testing only.
     if (!SENDGRID_API_KEY) {
-      // If SendGrid not configured, return OTP in response for local testing (remove in prod)
       return res.status(200).json({ message: 'OTP saved (no sendgrid configured)', otp })
     }
 
-    // Build email content
+    // Build email content using a template literal (correct syntax)
     const body = {
       personalizations: [
         { to: [{ email }], subject: 'Your Haulsale verification code' }
       ],
       from: { email: FROM_EMAIL, name: 'Haulsale' },
       content: [
-        { type: 'text/plain', value: Your verification code is: ${otp} (expires in 10 minutes) }
+        { type: 'text/plain', value: `Your verification code is: ${otp} (expires in 10 minutes)` }
       ]
     }
 
+    // Use global fetch (available on Vercel). If you prefer node-fetch, keep import and use it.
     const sendRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {
-        Authorization: Bearer ${SENDGRID_API_KEY},
+        Authorization: `Bearer ${SENDGRID_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
     })
 
     if (!sendRes.ok) {
-      console.error('SendGrid error', await sendRes.text())
+      const text = await sendRes.text()
+      console.error('SendGrid error', text)
       return res.status(500).json({ error: 'Failed to send OTP email' })
     }
 
