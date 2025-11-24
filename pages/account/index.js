@@ -42,33 +42,44 @@ export default function AccountPage() {
     router.push('/')
   }
 
-  const becomeSeller = async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const accessToken = sessionData?.session?.access_token
-      const { data: userData } = await supabase.auth.getUser()
-      const userId = userData?.user?.id
-      if (!accessToken || !userId) return alert('Not authenticated')
+  
+// call when user clicks button
+const becomeSeller = async () => {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
 
-      const r = await fetch('/api/create-seller', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({ user_id: userId, shop_name: 'Demo Wholesale' })
-      })
-      const json = await r.json()
-      if (!r.ok) {
-        alert(json.error || json.details || 'Failed to create seller')
-      } else {
-        alert(json.message || 'Seller created')
-      }
-    } catch (err) {
-      console.error(err)
-      alert('Unexpected error')
+    if (!accessToken || !userId) {
+      alert('You must be logged in');
+      return;
     }
+
+    const res = await fetch('/api/create-seller', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ user_id: userId, shop_name: 'Demo Wholesale' })
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      console.error(json);
+      alert(json.error || json.detail || 'Failed creating seller');
+      return;
+    }
+
+    alert('Seller created successfully');
+    // refresh UI/state to show new seller
+    window.location.reload();
+  } catch (err) {
+    console.error(err);
+    alert('Unexpected error');
   }
+};
 
   return (
     <div className="account-page">
