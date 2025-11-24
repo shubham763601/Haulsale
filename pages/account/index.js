@@ -44,15 +44,14 @@ export default function AccountPage() {
 
   
 // call when user clicks button
+// inside your account page (client-side)
 const becomeSeller = async () => {
   try {
+    // get session (contains access token)
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
-
-    if (!accessToken || !userId) {
-      alert('You must be logged in');
+    if (!accessToken) {
+      alert('Not authenticated');
       return;
     }
 
@@ -60,26 +59,25 @@ const becomeSeller = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
+        Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ user_id: userId, shop_name: 'Demo Wholesale' })
+      body: JSON.stringify({ shop_name: 'My Shop' }),
     });
 
     const json = await res.json();
     if (!res.ok) {
-      console.error(json);
-      alert(json.error || json.detail || 'Failed creating seller');
+      console.error('create-seller failed', json);
+      alert(json.error || 'Failed to create seller');
       return;
     }
 
-    alert('Seller created successfully');
-    // refresh UI/state to show new seller
-    window.location.reload();
+    alert('Seller created');
+    // Optionally refresh UI, fetch seller info, or router.reload()
   } catch (err) {
     console.error(err);
     alert('Unexpected error');
   }
-};
+}
 
   return (
     <div className="account-page">
