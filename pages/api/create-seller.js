@@ -1,53 +1,49 @@
-// pages/api/create-seller.js
+// frontend/pages/api/create-seller.js
 import { createClient } from '@supabase/supabase-js'
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+
+// admin client (service role) - used only server-side (never in browser)
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { persistSession: false },
+})
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SERVICE_ROLE || !SUPA_URL) return res.status(500).json({ error: 'Server misconfigured' });
-
-  // server client with service role key
-  const supabaseAdmin = createClient(SUPA_URL, SERVICE_ROLE);
-
-  // Optional: validate incoming bearer token (Authorization) to get user id
-  // If you prefer, client sends user_id in body instead
-  let userId = null;
   try {
-    const authHeader = req.headers.authorization || '';
-    if (authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      // validate token using supabaseAdmin.auth.getUser
-      const { data: sessionData, error } = await supabaseAdmin.auth.getUser(token);
-      if (error) {
-        // token invalid -> try fallback to body user_id
-        userId = req.body?.user_id ?? null;
-      } else {
-        userId = sessionData?.user?.id;
-      }
-    } else {
-      userId = req.body?.user_id ?? null;
+    // Get bearer token from client (client should pass the user's access token)
+    const authHeader = req.headers.authorization || ''
+    const token = authHeader.replace('Bearer ', '').trim()
+    if (!token) return res.status(401).json({ error: 'Missing access token' })
+
+    // verify the token & get user
+    const { data: userData, error: getUserError } = await supabaseAdmin.auth.getUser(token)
+    if (getUserError || !userData?.user) {
+      return res.status(401).json({ error: 'Invalid token' })
     }
-  } catch (e) {
-    userId = req.body?.user_id ?? null;
+    const user = userData.user
+
+    // body expected: { shop_name: 'My Shop' }
+    const { shop_name } = req.body
+    if (!shop_name) return res.status(400).json({ error: 'Missing shop_name' })
+
+    // Insert into sellers table using the admin client (service role bypasses RLS)
+    const { data, error } = await supabaseAdmin
+      .from('sellers')
+      .insert({ auth_user_id: user.id, shop_name })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Insert seller error:', error)
+      return res.status(500).json({ error: error.message })
+    }
+
+    return res.status(200).json({ message: 'Seller created', seller: data })
+  } catch (err) {
+    console.error('create-seller exception', err)
+    return res.status(500).json({ error: 'Server error' })
   }
-
-  if (!userId) return res.status(401).json({ error: 'Not authorized' });
-
-  const shop_name = (req.body?.shop_name || 'My Shop').slice(0, 200);
-
-  // Create seller record and return new seller
-  const { data, error } = await supabaseAdmin
-    .from('sellers')
-    .insert({ user_id: userId, shop_name })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('create-seller error', error);
-    return res.status(500).json({ error: 'DB insert failed', detail: error.message });
-  }
-
-  return res.status(200).json({ message: 'Seller created', seller: data });
 }
