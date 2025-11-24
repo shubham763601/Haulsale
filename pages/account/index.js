@@ -1,16 +1,33 @@
 // pages/account/index.js
+import Head from 'next/head'
 import React, { useContext, useEffect, useState } from 'react'
+import NavBar from '../../components/NavBar'
 import UserContext from '../../lib/userContext'
 import { supabase } from '../../lib/supabaseClient'
+import { useRouter } from 'next/router'
 
 export default function AccountPage() {
+  const router = useRouter()
   const { user } = useContext(UserContext)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    full_name: '',
+    phone: '',
+    company: '',
+    // add any other fields your profiles table has (replace/add)
+  })
+  const [error, setError] = useState(null)
+  const [info, setInfo] = useState(null)
 
   useEffect(() => {
     let mounted = true
     async function loadProfile() {
+      setLoading(true)
+      setError(null)
+      setInfo(null)
+
       if (!user) {
         setProfile(null)
         setLoading(false)
@@ -18,22 +35,35 @@ export default function AccountPage() {
       }
 
       try {
-        // Adjust table name if you use `profiles` or `users` etc.
+        // Try to read profile by user id
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
-          .single()
+          .maybeSingle()
 
         if (error) {
+          // permission or other error
           console.error('Error loading profile', error)
+          setError('Failed to load profile')
           setProfile(null)
+        } else if (!data) {
+          // No profile — initialize form with email and user fields
+          setProfile(null)
+          setForm(f => ({ ...f, email: user.email || '' }))
         } else {
-          if (!mounted) return
+          // We have profile data
           setProfile(data)
+          setForm({
+            full_name: data.full_name ?? '',
+            phone: data.phone ?? '',
+            company: data.company ?? '',
+            email: data.email ?? user.email ?? '',
+          })
         }
-      } catch (e) {
-        console.error(e)
+      } catch (err) {
+        console.error(err)
+        setError('Unexpected error loading profile')
       } finally {
         if (mounted) setLoading(false)
       }
@@ -43,15 +73,142 @@ export default function AccountPage() {
     return () => { mounted = false }
   }, [user])
 
-  if (loading) return <div>Loading profile...</div>
+  // Upsert profile (create if not exists)
+  async function handleSave(e) {
+    e?.preventDefault()
+    setSaving(true)
+    setError(null)
+    setInfo(null)
+    if (!user) {
+      setError('You must be signed in to update your profile')
+      setSaving(false)
+      return
+    }
 
-  if (!user) return <div>Please sign in to view your account</div>
+    try {
+      const payload = {
+        id: user.id,
+        email: form.email ?? user.email,
+        full_name: form.full_name,
+        phone: form.phone,
+        company: form.company,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(payload, { returning: 'representation' }) // upsert on primary key id
+        .select()
+
+      if (error) {
+        console.error('Upsert error', error)
+        setError('Failed to save profile: ' + (error.message || JSON.stringify(error)))
+      } else {
+        setProfile(Array.isArray(data) ? data[0] : data)
+        setInfo('Profile saved successfully')
+      }
+    } catch (err) {
+      console.error(err)
+      setError('Unexpected error while saving')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut()
+    router.push('/')
+  }
+
+  if (loading) {
+    return (
+      <>
+        <NavBar />
+        <main className="min-h-screen p-8 flex items-center justify-center">
+          <div className="text-gray-300">Loading profile...</div>
+        </main>
+      </>
+    )
+  }
+
+  if (!user) {
+    return (
+      <>
+        <NavBar />
+        <main className="min-h-screen p-8 flex items-center justify-center">
+          <div className="max-w-md bg-white/5 p-8 rounded">
+            <p className="text-white">Please sign in to view or edit your account.</p>
+            <div className="mt-4">
+              <button onClick={() => router.push('/auth/login')} className="px-4 py-2 rounded bg-indigo-600">
+                Go to Sign in
+              </button>
+            </div>
+          </div>
+        </main>
+      </>
+    )
+  }
 
   return (
-    <div>
-      <h1>Account</h1>
-      <p>Email: {user.email}</p>
-      <pre>{JSON.stringify(profile, null, 2)}</pre>
-    </div>
+    <>
+      <Head>
+        <title>Account — Haullcell</title>
+      </Head>
+
+      <NavBar />
+
+      <main className="min-h-screen p-8 flex items-start justify-center">
+        <section className="w-full max-w-2xl">
+          <div className="bg-white/5 backdrop-blur rounded-lg p-8 shadow">
+            <h1 className="text-2xl font-bold mb-4 text-white">Account</h1>
+            <p className="text-sm text-gray-300 mb-6">Manage your profile and account settings.</p>
+
+            <form onSubmit={handleSave} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-300">Email (read-only)</label>
+                <input className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white" value={form.email ?? user.email} readOnly />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-300">Full name</label>
+                <input className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white"
+                  value={form.full_name}
+                  onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-300">Phone</label>
+                <input className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white"
+                  value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-300">Company</label>
+                <input className="mt-1 block w-full rounded border border-gray-700 bg-transparent px-3 py-2 text-white"
+                  value={form.company}
+                  onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex gap-3 items-center">
+                <button disabled={saving} type="submit" className="px-4 py-2 rounded bg-green-600">
+                  {saving ? 'Saving...' : 'Save profile'}
+                </button>
+
+                <button type="button" onClick={handleSignOut} className="px-3 py-2 rounded bg-red-600">
+                  Sign out
+                </button>
+              </div>
+
+              {info && <p className="text-green-400">{info}</p>}
+              {error && <p className="text-red-400">{error}</p>}
+            </form>
+          </div>
+        </section>
+      </main>
+    </>
   )
 }
