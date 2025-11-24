@@ -3,6 +3,13 @@ import React, { useEffect, useState } from 'react'
 import UserContext from '../lib/userContext'
 import { supabase } from '../lib/supabaseClient'
 import '../styles/globals.css'
+import { CartProvider } from '../lib/cartContext'
+// ...inside render
+<UserContext.Provider value={{ user, setUser }}>
+  <CartProvider>
+    <Component {...pageProps} />
+  </CartProvider>
+</UserContext.Provider>
 
 function MyApp({ Component, pageProps }) {
   const [user, setUser] = useState(null)
