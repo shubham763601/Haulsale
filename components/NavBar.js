@@ -1,16 +1,28 @@
-// frontend/components/NavBar.js
-import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
 export default function NavBar() {
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.auth.getUser()
+      setUser(data?.user ?? null)
+    }
+    load()
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => sub.subscription?.unsubscribe?.()
+  }, [])
+
   return (
-    <nav style={{ padding: 12, borderBottom: '1px solid #eee', marginBottom: 18 }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between' }}>
-        <Link href="/"><a style={{ fontWeight: '700', fontSize: 18 }}>Haullcell</a></Link>
-        <div>
-          <Link href="/"><a style={{ marginRight: 12 }}>Marketplace</a></Link>
-          <Link href="/account"><a>My Account</a></Link>
-        </div>
-      </div>
+    <nav>
+      {/* show nav items based on user */}
+      {user ? <a href="/account">My Account</a> : <a href="/auth/login">Login / Sign up</a>}
     </nav>
   )
 }
