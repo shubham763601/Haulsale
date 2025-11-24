@@ -4,12 +4,6 @@ import UserContext from '../lib/userContext'
 import { supabase } from '../lib/supabaseClient'
 import '../styles/globals.css'
 import { CartProvider } from '../lib/cartContext'
-// ...inside render
-<UserContext.Provider value={{ user, setUser }}>
-  <CartProvider>
-    <Component {...pageProps} />
-  </CartProvider>
-</UserContext.Provider>
 
 function MyApp({ Component, pageProps }) {
   const [user, setUser] = useState(null)
@@ -17,11 +11,15 @@ function MyApp({ Component, pageProps }) {
   useEffect(() => {
     let mounted = true
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return
-      setUser(data?.session?.user ?? null)
-    }).catch(()=>{})
+    // Get current session on mount
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (!mounted) return
+        setUser(data?.session?.user ?? null)
+      })
+      .catch(() => {})
 
+    // Subscribe to auth changes (sign in / out)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
@@ -34,7 +32,9 @@ function MyApp({ Component, pageProps }) {
 
   return (
     <UserContext.Provider value={{ user, setUser }}>
-      <Component {...pageProps} />
+      <CartProvider>
+        <Component {...pageProps} />
+      </CartProvider>
     </UserContext.Provider>
   )
 }
