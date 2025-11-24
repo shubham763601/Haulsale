@@ -15,6 +15,10 @@ export default function SignupPage() {
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
 
+
+
+  
+    // call supabase directly to send OTP (this will use your Supabase email template)
   async function handleRequestOtp(e) {
     e?.preventDefault()
     setError(null)
@@ -23,32 +27,24 @@ export default function SignupPage() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+    // shouldCreateUser: true means Supabase will create the auth user automatically if not present.
+    // set to false if you don't want automatic creation.
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+        // set to false if you don't want new users auto-created here:
+          shouldCreateUser: true,
+        // optional: set a redirect if you're using magic links
+        // emailRedirectTo: `${window.location.origin}/auth/verify`
+        }
       })
 
-      // parse JSON defensively
-      let data = null
-      try {
-        data = await res.json()
-      } catch (parseErr) {
-        const txt = await res.text().catch(() => null)
-        throw new Error(`Invalid JSON response from server (status ${res.status}). Body: ${txt}`)
-      }
+      if (error) throw error
 
-      if (!res.ok) {
-        const msg = data?.error || data?.message || `Server returned ${res.status}`
-        throw new Error(msg)
-      }
-
+    // Successful: Supabase has queued an email containing the Token (OTP) or magic link.
+    // We proceed to OTP entry UI on client side.
       setPhase('otp-sent')
-      if (data?.otp) {
-        setInfo(`OTP (dev): ${data.otp}. It expires in 10 minutes.`)
-      } else {
-        setInfo('OTP sent to your email. Enter it below.')
-      }
+      setInfo('OTP sent to your email. Use the code in the email to verify.')
     } catch (err) {
       setError(err.message || String(err))
     } finally {
@@ -190,3 +186,4 @@ export default function SignupPage() {
     </>
   )
 }
+
