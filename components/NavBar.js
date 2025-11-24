@@ -1,59 +1,40 @@
 // frontend/components/NavBar.js
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient' // <- use the shared client
+import { useContext } from 'react'
+import { UserContext } from '../pages/_app' // import the context exported by _app.js
+import { supabase } from '../lib/supabaseClient'
 
 export default function NavBar() {
-  const [user, setUser] = useState(null)
+  const { user } = useContext(UserContext)
 
-  useEffect(() => {
-    // 1) initial check
-    let mounted = true
-    const init = async () => {
-      try {
-        const { data } = await supabase.auth.getUser()
-        if (!mounted) return
-        setUser(data?.user ?? null)
-      } catch (err) {
-        console.error('NavBar: getUser error', err)
-      }
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      // auth state subscriber in _app will clear user
+    } catch (err) {
+      console.error('logout error', err)
     }
-    init()
-
-    // 2) subscribe to auth changes (login / logout / token refresh)
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null)
-      }
-    )
-
-    return () => {
-      mounted = false
-      // unsubscribe safely
-      authListener?.subscription?.unsubscribe?.()
-    }
-  }, [])
+  }
 
   return (
-    <header className="site-header">
-      <nav className="nav">
-        <Link href="/"><a className="logo">Haullcell</a></Link>
+    <header style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ fontWeight: 700 }}>
+        <Link href="/">Haullcell</Link>
+      </div>
 
-        <div className="nav-right">
-          {user ? (
-            <>
-              <Link href="/account"><a>My Account</a></Link>
-              <span style={{ marginLeft: 12, fontSize: 14 }}>{user.email}</span>
-            </>
-          ) : (
-            <Link href="/auth/login"><a>Login / Sign up</a></Link>
-          )}
-        </div>
+      <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <Link href="/">Marketplace</Link>
+
+        {user ? (
+          <>
+            <Link href="/account">My Account</Link>
+            <span style={{ fontSize: '0.9rem', opacity: 0.9 }}>{user.email}</span>
+            <button onClick={handleLogout} style={{ marginLeft: 8 }}>Logout</button>
+          </>
+        ) : (
+          <Link href="/auth/login">Login / Sign up</Link>
+        )}
       </nav>
-      <style jsx>{`
-        .nav { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; }
-        .nav-right { display:flex; align-items:center; gap:8px; }
-      `}</style>
     </header>
   )
 }
