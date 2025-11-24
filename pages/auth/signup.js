@@ -21,23 +21,50 @@ export default function SignupPage() {
     setInfo(null)
     if (!email) return setError('Enter an email')
 
-    setLoading(true)
+    async function handleRequestOtp(e) {
+  e?.preventDefault()
+  setError(null)
+  setInfo(null)
+  if (!email) return setError('Enter an email')
+
+  setLoading(true)
+  try {
+    const res = await fetch('/api/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+
+    // try to parse JSON safely
+    let data = null
     try {
-      const res = await fetch('/api/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || 'Failed to request OTP')
-      setPhase('otp-sent')
-      setInfo('OTP sent to your email. Enter it below.')
-    } catch (err) {
-      setError(err.message || String(err))
-    } finally {
-      setLoading(false)
+      data = await res.json()
+    } catch (parseErr) {
+      // fallback: read text, show it
+      const txt = await res.text().catch(() => null)
+      throw new Error(`Invalid JSON response from server (status ${res.status}). Body: ${txt}`)
     }
+
+    if (!res.ok) {
+      // server responded with JSON error object
+      const msg = data?.error || data?.message || `Server returned ${res.status}`
+      throw new Error(msg)
+    }
+
+    // success — data may include otp when SendGrid not configured
+    setPhase('otp-sent')
+    if (data?.otp) {
+      setInfo(`OTP (dev): ${data.otp}. It expires in 10 minutes.`)
+    } else {
+      setInfo('OTP sent to your email. Enter it below.')
+    }
+  } catch (err) {
+    setError(err.message || String(err))
+  } finally {
+    setLoading(false)
   }
+}
+
 
   async function handleVerifyAndSignup(e) {
     e?.preventDefault()
