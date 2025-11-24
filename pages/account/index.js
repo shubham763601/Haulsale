@@ -16,7 +16,7 @@ export default function AccountPage() {
     full_name: '',
     phone: '',
     company: '',
-    // add any other fields your profiles table has (replace/add)
+    email: '',
   })
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
@@ -30,12 +30,12 @@ export default function AccountPage() {
 
       if (!user) {
         setProfile(null)
+        setForm(f => ({ ...f, email: '' }))
         setLoading(false)
         return
       }
 
       try {
-        // Try to read profile by user id
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
@@ -43,16 +43,14 @@ export default function AccountPage() {
           .maybeSingle()
 
         if (error) {
-          // permission or other error
           console.error('Error loading profile', error)
           setError('Failed to load profile')
           setProfile(null)
         } else if (!data) {
-          // No profile — initialize form with email and user fields
+          // initialize form with email
           setProfile(null)
-          setForm(f => ({ ...f, email: user.email || '' }))
+          setForm(f => ({ ...f, email: user.email ?? '' }))
         } else {
-          // We have profile data
           setProfile(data)
           setForm({
             full_name: data.full_name ?? '',
@@ -73,7 +71,6 @@ export default function AccountPage() {
     return () => { mounted = false }
   }, [user])
 
-  // Upsert profile (create if not exists)
   async function handleSave(e) {
     e?.preventDefault()
     setSaving(true)
@@ -97,7 +94,7 @@ export default function AccountPage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .upsert(payload, { returning: 'representation' }) // upsert on primary key id
+        .upsert(payload, { returning: 'representation' })
         .select()
 
       if (error) {
