@@ -53,54 +53,58 @@ export default function SignupPage() {
   }
 
   async function handleVerifyAndSignup(e) {
-    e?.preventDefault()
-    setError(null)
-    setInfo(null)
-    if (!email || !password || !otp) return setError('Provide email, password and OTP')
+  e?.preventDefault()
+  setError(null)
+  setInfo(null)
+  if (!email || !password || !otp) return setError('Provide email, password and OTP')
 
-    setLoading(true)
-    try {
-      const verify = await fetch('/api/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp }),
-      })
-      const vdata = await verify.json()
-      if (!verify.ok) throw new Error(vdata?.error || 'OTP verification failed')
+  setLoading(true)
+  try {
+    // verifyOtp will validate the token and return a session if successful
+    const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+      email,
+      token: otp,
+      type: 'email'
+    })
 
-      // OTP ok -> create the user with email + password (client-side)
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-      })
+    if (verifyError) throw verifyError
 
-      if (signUpError) throw new Error(signUpError.message || 'Signup failed')
+    // On success user is signed in and session present in verifyData
+    const sessionUser = verifyData?.user ?? verifyData?.session?.user
 
-      // Try to create a profile row if user object returned immediately
-      const createdUser = data?.user ?? data?.session?.user ?? null
-      if (createdUser) {
-        try {
-          await supabase.from('profiles').upsert({
-            id: createdUser.id,
-            email: createdUser.email,
-            created_at: new Date().toISOString(),
-          }, { returning: 'minimal' })
-        } catch (e) {
-          // non-fatal: profile can be created later
-          console.warn('profile create warning', e)
-        }
-      }
+    // Now set user's password so they have a permanent password for future login
+    // updateUser requires an active session (the user should be signed in after verifyOtp)
+    const { data: updData, error: updErr } = await supabase.auth.updateUser({
+      password: password
+    })
 
-      setPhase('verified')
-      setInfo('Signup successful. Redirecting...')
-
-      setTimeout(() => router.push('/'), 1200)
-    } catch (err) {
-      setError(err.message || String(err))
-    } finally {
-      setLoading(false)
+    if (updErr) {
+      // updateUser may fail if session isn't active; handle gracefully:
+      console.warn('Password update error (non-fatal):', updErr)
+      // Optionally, you can call resetPasswordForEmail flow or prompt user to use reset link.
     }
+
+    // Optionally create or upsert profile row now
+    try {
+      await supabase.from('profiles').upsert({
+        id: sessionUser.id,
+        email: sessionUser.email,
+        created_at: new Date().toISOString()
+      }, { returning: 'minimal' })
+    } catch (e) {
+      console.warn('profile upsert warning', e)
+    }
+
+    setPhase('verified')
+    setInfo('Verification successful — account created. Redirecting...')
+    setTimeout(() => router.push('/'), 1000)
+  } catch (err) {
+    setError(err.message || String(err))
+  } finally {
+    setLoading(false)
   }
+}
+
 
   return (
     <>
