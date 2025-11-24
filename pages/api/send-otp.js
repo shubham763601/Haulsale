@@ -1,6 +1,4 @@
 // pages/api/send-otp.js
-// Serverless function: create OTP in DB and send email via SendGrid
-
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -9,51 +7,56 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
 const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'no-reply@yourdomain.com'
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
-  console.warn('Missing supabase env in send-otp')
+  console.warn('Warning: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variable')
 }
 
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE)
 
 function genOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString() // 6-digit
+  return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Only POST' })
+  // ensure we always send JSON header
+  res.setHeader('Content-Type', 'application/json')
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Only POST allowed' })
+  }
+
   const { email } = req.body || {}
-  if (!email) return res.status(400).json({ error: 'Missing email' })
+  if (!email) {
+    return res.status(400).json({ error: 'Missing email' })
+  }
 
   try {
     const otp = genOtp()
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 10).toISOString() // 10 minutes
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 10).toISOString()
 
-    // insert OTP record using service role (server-side)
+    // insert OTP record
     const { error: insertErr } = await supabaseAdmin
       .from('signup_otps')
       .insert([{ email: email.toLowerCase(), otp, expires_at: expiresAt, used: false }])
 
     if (insertErr) {
       console.error('insert OTP error', insertErr)
-      return res.status(500).json({ error: 'Failed to save OTP' })
+      // return JSON error
+      return res.status(500).json({ error: 'Failed to save OTP', details: insertErr.message || insertErr })
     }
 
-    // If SendGrid is not configured, return the OTP in the response for local testing only.
+    // If SendGrid is not configured, return the OTP (local/dev mode)
     if (!SENDGRID_API_KEY) {
       return res.status(200).json({ message: 'OTP saved (no sendgrid configured)', otp })
     }
 
-    // Build email content using a template literal (correct syntax)
+    // Build SendGrid payload
     const body = {
-      personalizations: [
-        { to: [{ email }], subject: 'Your Haulsale verification code' }
-      ],
+      personalizations: [{ to: [{ email }], subject: 'Your Haulsale verification code' }],
       from: { email: FROM_EMAIL, name: 'Haulsale' },
-      content: [
-        { type: 'text/plain', value: `Your verification code is: ${otp} (expires in 10 minutes)` }
-      ]
+      content: [{ type: 'text/plain', value: `Your verification code is: ${otp} (expires in 10 minutes)` }]
     }
 
-    // Use global fetch (available on Vercel). If you prefer node-fetch, keep import and use it.
+    // Send via SendGrid (global fetch should exist on Vercel)
     const sendRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {
@@ -64,14 +67,16 @@ export default async function handler(req, res) {
     })
 
     if (!sendRes.ok) {
-      const text = await sendRes.text()
-      console.error('SendGrid error', text)
-      return res.status(500).json({ error: 'Failed to send OTP email' })
+      const text = await sendRes.text().catch(() => 'no-body')
+      console.error('SendGrid error status', sendRes.status, text)
+      return res.status(500).json({ error: 'Failed to send OTP email', status: sendRes.status, body: text })
     }
 
+    // success
     return res.status(200).json({ message: 'OTP sent' })
   } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Server error' })
+    // Catch unexpected runtime errors and always respond with JSON
+    console.error('Unhandled error in send-otp:', err)
+    return res.status(500).json({ error: 'Server error', details: (err && err.message) || String(err) })
   }
 }
