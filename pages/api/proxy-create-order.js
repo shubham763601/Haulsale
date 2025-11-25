@@ -1,22 +1,33 @@
 // pages/api/proxy-create-order.js
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-  const body = req.body
+  const FUNCTION_URL = process.env.NEXT_PUBLIC_EDGE_CREATE_ORDER_URL;
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    const SUPABASE_FUNCTION_URL = process.env.SUPABASE_FUNCTIONS_URL // example: https://<project>.functions.supabase.co
-    const FUNCTION_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const r = await fetch(`${SUPABASE_FUNCTION_URL}/create-order`, {
-      method: 'POST',
+    const response = await fetch(FUNCTION_URL, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${FUNCTION_KEY}`
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(body)
-    })
-    const j = await r.json()
-    return res.status(r.status).json(j)
-  } catch (e) {
-    console.error(e)
-    return res.status(500).json({ error: 'proxy error' })
+      body: JSON.stringify(req.body),
+    });
+
+    const text = await response.text();
+
+    try {
+      const json = JSON.parse(text);
+      return res.status(response.status).json(json);
+    } catch (e) {
+      console.error("Invalid JSON from edge function:", text);
+      return res.status(500).json({ error: "Invalid JSON from function" });
+    }
+
+  } catch (err) {
+    console.error("Proxy request failed:", err);
+    return res.status(500).json({ error: "Proxy error" });
   }
 }
