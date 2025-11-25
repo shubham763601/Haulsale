@@ -28,7 +28,7 @@ export default function AccountPage() {
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, email, full_name, phone, company, updated_at')
           .eq('id', user.id)
           .maybeSingle()
 
@@ -37,14 +37,7 @@ export default function AccountPage() {
           setError('Failed to load profile')
           setProfile(null)
         } else if (!data) {
-          // no profile row yet — show basic info from auth
-          setProfile({
-            id: user.id,
-            email: user.email,
-            full_name: '',
-            phone: '',
-            company: ''
-          })
+          setProfile(null)
         } else {
           setProfile(data)
         }
@@ -97,59 +90,44 @@ export default function AccountPage() {
   return (
     <>
       <Head>
-        <title>Account — Haullcell</title>
+        <title>Account — Haulcell</title>
       </Head>
 
       <NavBar />
 
       <main className="min-h-screen p-8 flex items-start justify-center">
-        <section className="w-full max-w-3xl">
+        <section className="w-full max-w-2xl">
           <div className="bg-white/5 backdrop-blur rounded-lg p-8 shadow">
             <h1 className="text-2xl font-bold mb-4 text-white">Account</h1>
-            <p className="text-sm text-gray-300 mb-6">View your account details and manage your activity.</p>
+            <p className="text-sm text-gray-300 mb-6">View your account details and quick actions.</p>
 
             {error && <p className="text-red-400 mb-4">{error}</p>}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="col-span-2">
-                <div className="bg-white/6 p-6 rounded mb-4">
-                  <h2 className="font-semibold text-lg text-white mb-2">Profile</h2>
-                  <p className="text-sm text-gray-300"><strong>Email:</strong> {profile?.email ?? user.email}</p>
-                  <p className="text-sm text-gray-300"><strong>Name:</strong> {profile?.full_name || '—'}</p>
-                  <p className="text-sm text-gray-300"><strong>Phone:</strong> {profile?.phone || '—'}</p>
-                  <p className="text-sm text-gray-300"><strong>Company:</strong> {profile?.company || '—'}</p>
-                </div>
-
-                <div className="bg-white/6 p-6 rounded">
-                  <h2 className="font-semibold text-lg text-white mb-2">Quick actions</h2>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button onClick={() => router.push('/account/orders')} className="px-4 py-2 rounded bg-indigo-600">
-                      View order history
-                    </button>
-
-                    <button onClick={() => router.push('/account/edit')} className="px-4 py-2 rounded bg-emerald-600">
-                      Edit account info
-                    </button>
-
-                    <button onClick={() => router.push('/products')} className="px-4 py-2 rounded bg-gray-700">
-                      Browse products
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <aside className="col-span-1">
-                <div className="bg-white/6 p-6 rounded">
-                  <h3 className="font-semibold text-white mb-2">Account</h3>
-                  <p className="text-sm text-gray-300 mb-4">Signed in as <span className="font-medium">{user.email}</span></p>
-
-                  <button onClick={handleSignOut} className="w-full px-4 py-2 rounded bg-red-600">
-                    Sign out
-                  </button>
-                </div>
-              </aside>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-white">Profile</h2>
+              <p className="text-sm text-gray-300 mt-2">Email: <span className="text-white underline">{user.email}</span></p>
+              <p className="text-sm text-gray-300 mt-1">Name: <span className="text-white">{profile?.full_name ?? '—'}</span></p>
+              <p className="text-sm text-gray-300 mt-1">Phone: <span className="text-white">{profile?.phone ?? '—'}</span></p>
+              <p className="text-sm text-gray-300 mt-1">Company: <span className="text-white">{profile?.company ?? '—'}</span></p>
             </div>
 
+            <div className="space-y-3">
+              <button onClick={() => router.push('/account/orders')} className="w-full px-4 py-3 rounded bg-violet-600">
+                View order history
+              </button>
+
+              <button onClick={() => router.push('/account/edit')} className="w-full px-4 py-3 rounded bg-green-600">
+                Edit account info
+              </button>
+
+              <button onClick={() => router.push('/products')} className="w-full px-4 py-3 rounded bg-gray-700 text-white">
+                Browse products
+              </button>
+
+              <button onClick={handleSignOut} className="w-full px-4 py-3 rounded bg-red-600 text-white">
+                Sign out
+              </button>
+            </div>
           </div>
         </section>
       </main>
