@@ -13,11 +13,7 @@ export default function CartPage() {
 
   async function handleProceed() {
     setError(null)
-    if (!items.length) {
-      setError('Cart is empty')
-      return
-    }
-    // For now, route to checkout page (we created earlier). Checkout will ensure user logged in.
+    if (!items.length) return setError('Cart is empty')
     router.push('/checkout')
   }
 

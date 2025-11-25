@@ -17,6 +17,7 @@ export default function ProductDetail() {
   useEffect(() => {
     if (!id) return
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   async function load() {
@@ -30,12 +31,66 @@ export default function ProductDetail() {
 
       if (error) throw error
       setProduct(data)
-      if (data?.product_variants?.length) setSelectedVariant(data.product_variants[0])
+      if (data?.product_variants?.length) {
+        // Make sure we use the actual object as selectedVariant
+        setSelectedVariant(data.product_variants[0])
+        // reset quantity
+        setQty(1)
+      } else {
+        setSelectedVariant(null)
+      }
     } catch (err) {
       console.error('load product', err)
+      setProduct(null)
+      setSelectedVariant(null)
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleVariantChange(variantId) {
+    const v = product.product_variants.find(x => String(x.id) === String(variantId))
+    setSelectedVariant(v || null)
+    setQty(1)
+  }
+
+  function clampQty(value) {
+    // ensure qty is at least 1 and at most stock (if available)
+    const n = Number(value) || 1
+    if (!selectedVariant) return 1
+    if (selectedVariant.stock == null) return Math.max(1, n)
+    return Math.max(1, Math.min(n, Number(selectedVariant.stock)))
+  }
+
+  function handleAddToCart() {
+    if (!selectedVariant) {
+      alert('Please select a variant before adding to cart.')
+      return
+    }
+    // guard against 0/negative qty and exceeding stock
+    const safeQty = clampQty(qty)
+    if (selectedVariant.stock != null && safeQty > selectedVariant.stock) {
+      alert(`Only ${selectedVariant.stock} units available for this variant.`)
+      return
+    }
+
+    // add item to cart (cartContext will persist to localStorage)
+    addItem(
+      {
+        id: selectedVariant.id,
+        variant_id: selectedVariant.id,
+        product_id: product.id,
+        product_title: product.title,
+        price: selectedVariant.price ?? 0,
+        sku: selectedVariant.sku ?? ''
+      },
+      safeQty
+    )
+
+    // simple feedback — replace with a nicer toast if you use one
+    alert('Added to cart')
+    // redirect to cart (optional). If you prefer to stay on product page, remove this.
+    router.push('/cart')
   }
 
   if (loading) return <>
@@ -53,29 +108,55 @@ export default function ProductDetail() {
       <NavBar />
       <main className="p-6 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold">{product.title}</h1>
+        {product.subtitle && <p className="text-sm text-gray-400">{product.subtitle}</p>}
         <p className="text-gray-300 mt-2">{product.description}</p>
 
         <div className="mt-4">
           <label className="block text-sm text-gray-300">Variants</label>
-          <select className="mt-1 block border rounded px-3 py-2" value={selectedVariant?.id || ''} onChange={e => {
-            const v = product.product_variants.find(x => String(x.id) === String(e.target.value))
-            setSelectedVariant(v)
-          }}>
-            {product.product_variants.map(v => <option key={v.id} value={v.id}>{v.sku || `Variant ${v.id}`} — ₹{v.price} — Stock: {v.stock}</option>)}
-          </select>
+
+          {product.product_variants?.length ? (
+            <select
+              className="mt-1 block border rounded px-3 py-2 bg-gray-800 text-white"
+              value={selectedVariant?.id ?? ''}
+              onChange={e => handleVariantChange(e.target.value)}
+            >
+              {product.product_variants.map(v => (
+                <option key={v.id} value={v.id}>
+                  {v.sku || `Variant ${v.id}`} — ₹{v.price ?? '—'} — Stock: {v.stock ?? '—'}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="mt-2 text-yellow-300">No variants available</div>
+          )}
         </div>
 
         <div className="mt-4 flex items-center gap-3">
-          <label>Qty</label>
-          <input type="number" min="1" value={qty} onChange={e => setQty(Number(e.target.value))} className="w-20 px-2 py-1 border rounded" />
+          <label className="text-sm text-gray-300">Qty</label>
+          <input
+            type="number"
+            min="1"
+            value={qty}
+            onChange={e => setQty(clampQty(e.target.value))}
+            className="w-24 px-2 py-1 border rounded bg-gray-800 text-white"
+          />
+
+          {selectedVariant && (
+            <div className="ml-4 text-sm text-gray-300">
+              Price: <span className="font-semibold">₹{selectedVariant.price ?? '—'}</span>
+              <div className="text-xs text-gray-500">Stock: {selectedVariant.stock ?? '—'}</div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
-          <button onClick={() => {
-            if (!selectedVariant) return
-            addItem({...selectedVariant, product_id: product.id, product_title: product.title}, qty)
-            router.push('/cart')
-          }} className="px-4 py-2 rounded bg-indigo-600">Add to cart</button>
+          <button
+            onClick={handleAddToCart}
+            disabled={!selectedVariant || (selectedVariant && selectedVariant.stock === 0)}
+            className={`px-4 py-2 rounded ${!selectedVariant || (selectedVariant && selectedVariant.stock === 0) ? 'bg-gray-600 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+          >
+            {selectedVariant && selectedVariant.stock === 0 ? 'Out of stock' : 'Add to cart'}
+          </button>
         </div>
       </main>
     </>
