@@ -32,9 +32,7 @@ export default function ProductDetail() {
       if (error) throw error
       setProduct(data)
       if (data?.product_variants?.length) {
-        // Make sure we use the actual object as selectedVariant
         setSelectedVariant(data.product_variants[0])
-        // reset quantity
         setQty(1)
       } else {
         setSelectedVariant(null)
@@ -55,7 +53,6 @@ export default function ProductDetail() {
   }
 
   function clampQty(value) {
-    // ensure qty is at least 1 and at most stock (if available)
     const n = Number(value) || 1
     if (!selectedVariant) return 1
     if (selectedVariant.stock == null) return Math.max(1, n)
@@ -67,14 +64,12 @@ export default function ProductDetail() {
       alert('Please select a variant before adding to cart.')
       return
     }
-    // guard against 0/negative qty and exceeding stock
     const safeQty = clampQty(qty)
     if (selectedVariant.stock != null && safeQty > selectedVariant.stock) {
       alert(`Only ${selectedVariant.stock} units available for this variant.`)
       return
     }
 
-    // add item to cart (cartContext will persist to localStorage)
     addItem(
       {
         id: selectedVariant.id,
@@ -87,9 +82,7 @@ export default function ProductDetail() {
       safeQty
     )
 
-    // simple feedback — replace with a nicer toast if you use one
     alert('Added to cart')
-    // redirect to cart (optional). If you prefer to stay on product page, remove this.
     router.push('/cart')
   }
 
