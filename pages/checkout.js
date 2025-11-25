@@ -45,7 +45,7 @@ export default function Checkout() {
         <section className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-bold mb-4">Checkout</h1>
           <div className="bg-white/5 p-6 rounded">
-            <p>Order total: ₹{total.toFixed(2)}</p>
+            <p>Order total: â¹{total.toFixed(2)}</p>
             {error && <p className="text-red-400">{error}</p>}
             <button className="mt-4 px-4 py-2 bg-green-600 rounded" onClick={handleCreateOrder} disabled={busy}>
               {busy ? 'Creating order...' : 'Place order'}
