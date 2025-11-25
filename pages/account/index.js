@@ -195,6 +195,15 @@ export default function AccountPage() {
                   {saving ? 'Saving...' : 'Save profile'}
                 </button>
 
+                {/* NEW: View Order History button */}
+                <button
+                  type="button"
+                  onClick={() => router.push('/account/orders')}
+                  className="px-3 py-2 rounded bg-indigo-600"
+                >
+                  View order history
+                </button>
+
                 <button type="button" onClick={handleSignOut} className="px-3 py-2 rounded bg-red-600">
                   Sign out
                 </button>
