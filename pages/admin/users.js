@@ -33,7 +33,7 @@ export default function AdminUsers() {
         setUsers([])
         return
       }
-      // add tempRole field for UI editing
+
       const withDraft = (data || []).map(u => ({
         ...u,
         tempRole: u.role || 'buyer',
@@ -47,10 +47,18 @@ export default function AdminUsers() {
     }
   }
 
+  function updateTempRole(userId, newRole) {
+    setUsers(prev =>
+      prev.map(u =>
+        u.id === userId ? { ...u, tempRole: newRole } : u
+      )
+    )
+  }
+
   async function applyRoleChange(userId) {
-    const userRow = users.find(u => u.id === userId)
-    if (!userRow) return
-    const newRole = userRow.tempRole
+    const row = users.find(u => u.id === userId)
+    if (!row) return
+    const newRole = row.tempRole
 
     try {
       const session = await supabase.auth.getSession()
@@ -71,20 +79,11 @@ export default function AdminUsers() {
         return
       }
 
-      // After success, refresh list
       await loadUsers(page)
     } catch (err) {
       console.error('applyRoleChange error', err)
       alert('Failed to change role: ' + (err.message || String(err)))
     }
-  }
-
-  function updateTempRole(userId, val) {
-    setUsers(prev =>
-      prev.map(u =>
-        u.id === userId ? { ...u, tempRole: val } : u
-      )
-    )
   }
 
   if (loading) {
@@ -119,9 +118,11 @@ export default function AdminUsers() {
         <section className="max-w-6xl mx-auto">
           <header className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-3">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Admin — Users</h1>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                Admin — Users
+              </h1>
               <p className="text-sm text-slate-300 mt-1">
-                Manage roles, view KYC status, and drill into per-user products and orders.
+                Manage roles, see KYC status, and drill into each user&apos;s products and orders.
               </p>
             </div>
             <div className="text-xs text-slate-400">
@@ -223,7 +224,6 @@ export default function AdminUsers() {
             </table>
           </div>
 
-          {/* Pagination */}
           <div className="mt-6 flex items-center justify-between">
             <button
               className="px-3 py-1.5 rounded-md border border-slate-600 text-xs disabled:opacity-40"

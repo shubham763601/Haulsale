@@ -8,11 +8,12 @@ import { useRouter } from 'next/router'
 export default function AdminUserProducts() {
   const { loading, isAdmin } = useAdmin()
   const [profile, setProfile] = useState(null)
+  const [seller, setSeller] = useState(null)
   const [products, setProducts] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const router = useRouter()
-  const userId = router.query.user_id
+  const userId = router.query.user_id // profiles.id
 
   useEffect(() => {
     if (loading || !isAdmin) return
@@ -24,7 +25,7 @@ export default function AdminUserProducts() {
     setBusy(true)
     setError(null)
     try {
-      // 1) Load profile
+      // 1) profile
       const { data: p, error: pErr } = await supabase
         .from('profiles')
         .select('id, full_name, email')
@@ -35,35 +36,28 @@ export default function AdminUserProducts() {
         console.error('load profile', pErr)
         setError('Failed to load profile')
         setProfile(null)
-        setProducts([])
-        return
+      } else {
+        setProfile(p)
       }
-      setProfile(p)
 
-      // 2) Find seller ids mapped to this user
-      const { data: sellers, error: sErr } = await supabase
+      // 2) seller row (shop_name, gstin)
+      const { data: s, error: sErr } = await supabase
         .from('sellers')
-        .select('id')
+        .select('id, auth_user_id, shop_name, gstin')
         .eq('auth_user_id', userId)
+        .maybeSingle()
 
       if (sErr) {
-        console.error('load sellers', sErr)
-        setError('Failed to load seller mapping')
-        setProducts([])
-        return
+        console.error('load seller', sErr)
+        // Not fatal: user may not be a seller
       }
+      setSeller(s || null)
 
-      const sellerIds = (sellers || []).map(s => s.id)
-      if (sellerIds.length === 0) {
-        setProducts([])
-        return
-      }
-
-      // 3) Load products for these sellerIds
+      // 3) products where products.seller_id = profiles.id (same as sellers.auth_user_id)
       const { data: prods, error: prodErr } = await supabase
         .from('products')
         .select('id, title, price, seller_id, created_at')
-        .in('seller_id', sellerIds)
+        .eq('seller_id', userId)
         .order('created_at', { ascending: false })
 
       if (prodErr) {
@@ -119,6 +113,11 @@ export default function AdminUserProducts() {
                   {profile.full_name || '(no name)'} · {profile.email}
                 </p>
               )}
+              {seller && (
+                <p className="text-xs text-slate-400 mt-1">
+                  Shop: {seller.shop_name || '(no shop name)'} · GSTIN: {seller.gstin || '—'}
+                </p>
+              )}
             </div>
             <button
               onClick={() => router.push('/admin/users')}
@@ -157,8 +156,18 @@ export default function AdminUserProducts() {
                   Product ID: {prod.id}
                 </div>
                 <div className="text-xs text-slate-300">
-                  Seller ID: {prod.seller_id}
+                  Seller (user id): {prod.seller_id}
                 </div>
+                {seller && (
+                  <>
+                    <div className="text-xs text-slate-300 mt-1">
+                      Shop: {seller.shop_name || '—'}
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      GSTIN: {seller.gstin || '—'}
+                    </div>
+                  </>
+                )}
                 <div className="text-xs text-emerald-300 mt-1">
                   Price: ₹{prod.price != null ? Number(prod.price).toFixed(2) : '—'}
                 </div>
