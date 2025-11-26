@@ -86,6 +86,33 @@ export default function AdminUsers() {
     }
   }
 
+  async function handleReviewSeller(userId, decision) {
+    try {
+      const session = await supabase.auth.getSession()
+      const token = session?.data?.session?.access_token
+      const headers = { 'content-type': 'application/json' }
+      if (token) headers.Authorization = `Bearer ${token}`
+
+      const resp = await fetch('/api/admin/review-seller', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_id: userId, decision }),
+      })
+
+      const json = await resp.json().catch(() => null)
+      if (!resp.ok) {
+        const msg = json?.error || json?.message || `HTTP ${resp.status}`
+        alert('Failed to update KYC: ' + msg)
+        return
+      }
+
+      await loadUsers(page)
+    } catch (err) {
+      console.error('handleReviewSeller error', err)
+      alert('Failed to update KYC: ' + (err.message || String(err)))
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -122,7 +149,7 @@ export default function AdminUsers() {
                 Admin — Users
               </h1>
               <p className="text-sm text-slate-300 mt-1">
-                Manage roles, see KYC status, and drill into each user&apos;s products and orders.
+                Manage roles, KYC status, and open user-specific products & orders.
               </p>
             </div>
             <div className="text-xs text-slate-400">
@@ -173,15 +200,31 @@ export default function AdminUsers() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium
-                        ${u.kyc_status === 'approved'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
-                          : u.kyc_status === 'rejected'
-                          ? 'bg-red-500/20 text-red-200 border border-red-500/60'
-                          : 'bg-amber-500/15 text-amber-200 border border-amber-500/40'}
-                      `}>
-                        {u.kyc_status || 'pending'}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium
+                          ${u.kyc_status === 'approved'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                            : u.kyc_status === 'rejected'
+                            ? 'bg-red-500/20 text-red-200 border border-red-500/60'
+                            : 'bg-amber-500/15 text-amber-200 border border-amber-500/40'}
+                        `}>
+                          {u.kyc_status || 'pending'}
+                        </span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleReviewSeller(u.id, 'approve')}
+                            className="flex-1 text-[10px] px-2 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500"
+                          >
+                            Approve seller
+                          </button>
+                          <button
+                            onClick={() => handleReviewSeller(u.id, 'reject')}
+                            className="flex-1 text-[10px] px-2 py-1 rounded-full bg-red-600 hover:bg-red-500"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
