@@ -1,24 +1,30 @@
 // pages/admin/users.js
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState } from 'react'
 import NavBar from '../../components/NavBar'
 import useAdmin from '../../lib/useAdmin'
 import { supabase } from '../../lib/supabaseClient'
+import { useRouter } from 'next/router'
 
 export default function AdminUsers() {
   const { loading, isAdmin } = useAdmin()
   const [users, setUsers] = useState([])
-  const [page, setPage] = useState(1)
   const [fetching, setFetching] = useState(false)
+  const [page, setPage] = useState(1)
   const perPage = 20
+  const router = useRouter()
 
-  // stable fetchUsers so effect deps are correct
-  const fetchUsers = useCallback(async (pageToFetch = page) => {
+  useEffect(() => {
+    if (loading || !isAdmin) return
+    loadUsers(page)
+  }, [loading, isAdmin, page])
+
+  async function loadUsers(pageNumber) {
     setFetching(true)
     try {
-      const from = (pageToFetch - 1) * perPage
+      const from = (pageNumber - 1) * perPage
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, role, seller_status, created_at')
+        .select('id, full_name, email, phone, kyc_status, role, created_at')
         .order('created_at', { ascending: false })
         .range(from, from + perPage - 1)
 
@@ -27,129 +33,214 @@ export default function AdminUsers() {
         setUsers([])
         return
       }
-      setUsers(data || [])
+      // add tempRole field for UI editing
+      const withDraft = (data || []).map(u => ({
+        ...u,
+        tempRole: u.role || 'buyer',
+      }))
+      setUsers(withDraft)
     } catch (err) {
       console.error('Unexpected fetch users error', err)
       setUsers([])
     } finally {
       setFetching(false)
     }
-  }, [page])
+  }
 
-  // Load users when admin ready or page changes
-  useEffect(() => {
-    if (loading) return
-    if (!isAdmin) return
-    fetchUsers(page)
-  }, [loading, isAdmin, page, fetchUsers])
+  async function applyRoleChange(userId) {
+    const userRow = users.find(u => u.id === userId)
+    if (!userRow) return
+    const newRole = userRow.tempRole
 
-  // change role via server API (server should verify requestor is admin)
-  async function setRole(userId, role) {
     try {
-      // get current session token to authenticate the request server-side
-      const sessionResp = await supabase.auth.getSession()
-      const token = sessionResp?.data?.session?.access_token
-
+      const session = await supabase.auth.getSession()
+      const token = session?.data?.session?.access_token
       const headers = { 'content-type': 'application/json' }
       if (token) headers.Authorization = `Bearer ${token}`
 
       const resp = await fetch('/api/admin/set-role', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ user_id: userId, role }),
+        body: JSON.stringify({ user_id: userId, role: newRole }),
       })
 
       if (!resp.ok) {
-        // try to parse error json, otherwise fall back to status text
         const json = await resp.json().catch(() => null)
-        const msg = json?.error || json?.message || resp.statusText || `HTTP ${resp.status}`
+        const msg = json?.error || json?.message || `HTTP ${resp.status}`
         alert('Failed to change role: ' + msg)
         return
       }
 
-      // refresh users after successful role change
-      fetchUsers(page)
+      // After success, refresh list
+      await loadUsers(page)
     } catch (err) {
-      console.error('setRole error', err)
+      console.error('applyRoleChange error', err)
       alert('Failed to change role: ' + (err.message || String(err)))
     }
   }
 
-  if (loading) return (
-    <>
-      <NavBar />
-      <main className="p-8">Loading...</main>
-    </>
-  )
+  function updateTempRole(userId, val) {
+    setUsers(prev =>
+      prev.map(u =>
+        u.id === userId ? { ...u, tempRole: val } : u
+      )
+    )
+  }
 
-  if (!isAdmin) return (
-    <>
-      <NavBar />
-      <main className="p-8">
-        <div className="max-w-3xl mx-auto bg-white/5 p-6 rounded">
-          <h2 className="text-lg font-semibold">Admin area</h2>
-          <p className="text-gray-300 mt-2">You must be an admin to view this page.</p>
-        </div>
-      </main>
-    </>
-  )
+  if (loading) {
+    return (
+      <>
+        <NavBar />
+        <main className="p-8 text-white">Checking admin access…</main>
+      </>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <>
+        <NavBar />
+        <main className="p-8">
+          <div className="max-w-2xl mx-auto bg-red-900/40 border border-red-500/60 p-6 rounded-xl text-white">
+            <h2 className="text-lg font-semibold">Admin only</h2>
+            <p className="mt-2 text-sm text-red-100">
+              You don&apos;t have permission to view this page.
+            </p>
+          </div>
+        </main>
+      </>
+    )
+  }
 
   return (
     <>
       <NavBar />
-      <main className="p-8 max-w-5xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Users</h1>
-
-        <div className="mb-4">
-          <span className="text-sm text-gray-400">Showing page {page} — {fetching ? 'loading…' : `${users.length} users`}</span>
-        </div>
-
-        <div className="space-y-4">
-          {users.length === 0 && !fetching && (
-            <div className="text-gray-400">No users found.</div>
-          )}
-
-          {users.map(u => (
-            <div key={u.id} className="p-4 bg-white/5 rounded flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{u.full_name || '(no name)'}</div>
-                <div className="text-sm text-gray-300">{u.email || '—'}</div>
-                <div className="text-xs text-gray-400">Joined: {u.created_at ? new Date(u.created_at).toLocaleString() : '—'}</div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <select
-                  value={u.role || 'buyer'}
-                  onChange={e => setRole(u.id, e.target.value)}
-                  className="bg-transparent border px-2 py-1 rounded text-sm"
-                >
-                  <option value="buyer">buyer</option>
-                  <option value="seller">seller</option>
-                  <option value="admin">admin</option>
-                </select>
-              </div>
+      <main className="min-h-screen p-6 md:p-8 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
+        <section className="max-w-6xl mx-auto">
+          <header className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-3">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Admin — Users</h1>
+              <p className="text-sm text-slate-300 mt-1">
+                Manage roles, view KYC status, and drill into per-user products and orders.
+              </p>
             </div>
-          ))}
-        </div>
+            <div className="text-xs text-slate-400">
+              Page {page} · {fetching ? 'Loading…' : `${users.length} users`}
+            </div>
+          </header>
 
-        <div className="mt-6 flex items-center gap-3">
-          <button
-            className="px-3 py-1 border rounded disabled:opacity-50"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            Prev
-          </button>
+          <div className="overflow-x-auto rounded-2xl bg-slate-900/70 border border-slate-700/70 shadow-xl">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-900/90">
+                <tr className="text-left text-slate-300 border-b border-slate-700/70">
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">KYC</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 && !fetching && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                      No users found.
+                    </td>
+                  </tr>
+                )}
 
-          <div className="px-3 py-1">Page {page}</div>
+                {users.map(u => (
+                  <tr
+                    key={u.id}
+                    className="border-t border-slate-800/70 hover:bg-slate-800/60 transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{u.full_name || '(no name)'}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        Joined: {u.created_at ? new Date(u.created_at).toLocaleString() : '—'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-xs md:text-sm text-slate-100 break-all">
+                        {u.email || '—'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-xs text-slate-200">
+                        {u.phone || '—'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium
+                        ${u.kyc_status === 'approved'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                          : u.kyc_status === 'rejected'
+                          ? 'bg-red-500/20 text-red-200 border border-red-500/60'
+                          : 'bg-amber-500/15 text-amber-200 border border-amber-500/40'}
+                      `}>
+                        {u.kyc_status || 'pending'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={u.tempRole}
+                          onChange={e => updateTempRole(u.id, e.target.value)}
+                          className="bg-slate-900/70 border border-slate-600 px-2 py-1 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="buyer">buyer</option>
+                          <option value="seller">seller</option>
+                          <option value="admin">admin</option>
+                        </select>
+                        <button
+                          onClick={() => applyRoleChange(u.id)}
+                          className="text-[11px] px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition-all shadow-sm"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col md:flex-row gap-2 justify-center">
+                        <button
+                          onClick={() => router.push(`/admin/user-products?user_id=${u.id}`)}
+                          className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-sky-600/90 hover:bg-sky-500 shadow-sm hover:shadow-md transition-all"
+                        >
+                          Products
+                        </button>
+                        <button
+                          onClick={() => router.push(`/admin/user-orders?user_id=${u.id}`)}
+                          className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-fuchsia-600/90 hover:bg-fuchsia-500 shadow-sm hover:shadow-md transition-all"
+                        >
+                          Orders
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          <button
-            className="px-3 py-1 border rounded"
-            onClick={() => setPage(p => p + 1)}
-          >
-            Next
-          </button>
-        </div>
+          {/* Pagination */}
+          <div className="mt-6 flex items-center justify-between">
+            <button
+              className="px-3 py-1.5 rounded-md border border-slate-600 text-xs disabled:opacity-40"
+              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              ← Previous
+            </button>
+            <span className="text-xs text-slate-400">Page {page}</span>
+            <button
+              className="px-3 py-1.5 rounded-md border border-slate-600 text-xs"
+              onClick={() => setPage(p => p + 1)}
+            >
+              Next →
+            </button>
+          </div>
+        </section>
       </main>
     </>
   )
