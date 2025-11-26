@@ -28,7 +28,7 @@ export default function AccountPage() {
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, email, full_name, phone, company, updated_at')
+          .select('id, email, full_name, phone, company, role, updated_at')
           .eq('id', user.id)
           .maybeSingle()
 
@@ -109,6 +109,8 @@ export default function AccountPage() {
               <p className="text-sm text-gray-300 mt-1">Name: <span className="text-white">{profile?.full_name ?? '—'}</span></p>
               <p className="text-sm text-gray-300 mt-1">Phone: <span className="text-white">{profile?.phone ?? '—'}</span></p>
               <p className="text-sm text-gray-300 mt-1">Company: <span className="text-white">{profile?.company ?? '—'}</span></p>
+              <p className="text-sm text-gray-300 mt-1">Role: <span className="text-white">{profile?.role ?? '—'}</span></p>
+  
             </div>
 
             <div className="space-y-3">
