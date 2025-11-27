@@ -1,132 +1,157 @@
 // pages/seller/profile.js
+import React, { useEffect, useState } from 'react'
 import SellerLayout from '../../components/SellerLayout'
+import { supabase } from '../../lib/supabaseClient'
 
 export default function SellerProfilePage() {
-  // later you can load/save from `sellers` + `profiles` table
+  const [user, setUser] = useState(null)
+  const [seller, setSeller] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    shop_name: '',
+    gstin: '',
+    logo_url: '',
+    business_address: '',
+    contact_number: '',
+    business_email: '',
+    business_hours: '',
+    bank_account: ''
+  })
+
+  useEffect(() => {
+    let mounted = true
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data?.session?.user ?? null
+      if (mounted) setUser(u)
+      if (u) loadSeller(u.id)
+    })
+    return () => { mounted = false }
+  }, [])
+
+  async function loadSeller(uid) {
+    setLoading(true)
+    try {
+      const { data } = await supabase
+        .from('sellers')
+        .select('*')
+        .eq('auth_user_id', uid)
+        .maybeSingle()
+
+      if (data) {
+        setSeller(data)
+        setForm({
+          shop_name: data.shop_name || '',
+          gstin: data.gstin || '',
+          logo_url: data.logo_url || '',
+          business_address: data.business_address || '',
+          contact_number: data.contact_number || '',
+          business_email: data.business_email || '',
+          business_hours: data.business_hours || '',
+          bank_account: data.bank_account || ''
+        })
+      } else {
+        setSeller(null)
+      }
+    } catch (err) {
+      console.error('load seller', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSave(e) {
+    e?.preventDefault()
+    if (!user) return
+    setSaving(true)
+    try {
+      const payload = {
+        auth_user_id: user.id,
+        shop_name: form.shop_name,
+        gstin: form.gstin || null,
+        logo_url: form.logo_url || null,
+        business_address: form.business_address || null,
+        contact_number: form.contact_number || null,
+        business_email: form.business_email || null,
+        business_hours: form.business_hours || null,
+        bank_account: form.bank_account || null,
+      }
+
+      // upsert: find by auth_user_id
+      const { data, error } = await supabase
+        .from('sellers')
+        .upsert(payload, { onConflict: 'auth_user_id', returning: 'representation' })
+        .select()
+
+      if (error) throw error
+
+      // supabase returns array
+      const newRow = Array.isArray(data) ? data[0] : data
+      setSeller(newRow)
+      alert('Saved')
+    } catch (err) {
+      console.error('save seller', err)
+      alert('Save failed: ' + (err.message || JSON.stringify(err)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <SellerLayout title="Store profile">
-      <div className="max-w-3xl mx-auto bg-slate-800/70 rounded-2xl p-6 md:p-8">
-        <h2 className="text-xl font-semibold mb-1">Store Profile</h2>
-        <p className="text-sm text-slate-400 mb-6">
-          Manage your store details that buyers will see.
-        </p>
+      <div className="max-w-3xl mx-auto bg-slate-800/60 p-6 rounded">
+        <h2 className="text-lg font-semibold mb-2">Store profile</h2>
 
-        <form className="space-y-5">
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Store logo
-            </label>
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-xl bg-slate-700 flex items-center justify-center text-sm text-slate-300">
-                Logo
+        {loading ? <div>Loading...</div> : (
+          <form onSubmit={handleSave} className="space-y-4">
+            <div>
+              <label className="text-xs block mb-1">Shop name</label>
+              <input className="w-full p-2 rounded bg-slate-900/60" value={form.shop_name} onChange={e => setForm(f => ({ ...f, shop_name: e.target.value }))} required />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs block mb-1">GSTIN</label>
+                <input className="w-full p-2 rounded bg-slate-900/60" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} />
               </div>
-              <button
-                type="button"
-                className="px-3 py-2 rounded-lg bg-amber-500 text-slate-900 text-sm font-medium hover:bg-amber-400"
-              >
-                Upload image
-              </button>
+              <div>
+                <label className="text-xs block mb-1">Contact number</label>
+                <input className="w-full p-2 rounded bg-slate-900/60" value={form.contact_number} onChange={e => setForm(f => ({ ...f, contact_number: e.target.value }))} />
+              </div>
             </div>
-          </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                Store name
-              </label>
-              <input
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/60"
-                placeholder="eg. Capitol Goods"
-              />
+              <label className="text-xs block mb-1">Business email</label>
+              <input className="w-full p-2 rounded bg-slate-900/60" value={form.business_email} onChange={e => setForm(f => ({ ...f, business_email: e.target.value }))} />
             </div>
+
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                Owner name
-              </label>
-              <input
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/60"
-                placeholder="Your full name"
-              />
+              <label className="text-xs block mb-1">Business address</label>
+              <textarea className="w-full p-2 rounded bg-slate-900/60" value={form.business_address} onChange={e => setForm(f => ({ ...f, business_address: e.target.value }))} />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Store address
-            </label>
-            <textarea
-              rows={3}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/60"
-              placeholder="Address, city, state, PIN"
-            />
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                GSTIN
-              </label>
-              <input
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/60"
-                placeholder="07AAAAA0000A1Z5"
-              />
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs block mb-1">Logo URL</label>
+                <input className="w-full p-2 rounded bg-slate-900/60" value={form.logo_url} onChange={e => setForm(f => ({ ...f, logo_url: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs block mb-1">Business hours</label>
+                <input className="w-full p-2 rounded bg-slate-900/60" value={form.business_hours} onChange={e => setForm(f => ({ ...f, business_hours: e.target.value }))} />
+              </div>
             </div>
-            <div className="flex items-end">
-              <button
-                type="button"
-                className="w-full md:w-auto px-3 py-2 rounded-lg bg-emerald-500 text-slate-900 text-sm font-medium hover:bg-emerald-400"
-              >
-                Verify
-              </button>
-            </div>
-          </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                Contact number
-              </label>
-              <input
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/60"
-                placeholder="+91 9876543210"
-              />
+              <label className="text-xs block mb-1">Bank account (optional)</label>
+              <input className="w-full p-2 rounded bg-slate-900/60" value={form.bank_account} onChange={e => setForm(f => ({ ...f, bank_account: e.target.value }))} />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                Business email
-              </label>
-              <input
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/60"
-                placeholder="you@store.com"
-              />
+
+            <div className="flex gap-2">
+              <button disabled={saving} className="px-3 py-2 rounded bg-emerald-500 text-slate-900">Save</button>
+              <button type="button" onClick={() => loadSeller(user?.id)} className="px-3 py-2 rounded border">Reload</button>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Business hours
-            </label>
-            <input
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/60"
-              placeholder="Mon–Sat, 10:00 AM – 8:00 PM"
-            />
-          </div>
-
-          <div className="pt-2 flex gap-3">
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-900 text-sm font-semibold hover:bg-emerald-400"
-            >
-              Save changes
-            </button>
-            <button
-              type="button"
-              className="px-4 py-2 rounded-lg border border-slate-600 text-sm text-slate-200 hover:bg-slate-800/80"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+          </form>
+        )}
       </div>
     </SellerLayout>
   )
