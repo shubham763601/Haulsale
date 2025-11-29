@@ -3,6 +3,14 @@ import React from 'react'
 import Link from 'next/link'
 
 function ProductCard({ product }) {
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+  // Build full public URL from bucket "public-assets"
+  const imageUrl =
+    baseUrl && product.imagePath
+      ? `${baseUrl.replace(/\/$/, '')}/storage/v1/object/public/public-assets/${product.imagePath}`
+      : null
+
   const price =
     typeof product.price === 'number'
       ? `₹${product.price.toFixed(2)}`
@@ -11,17 +19,31 @@ function ProductCard({ product }) {
   return (
     <Link href={`/products/${product.id}`}>
       <a className="group flex-shrink-0 w-40 sm:w-48 rounded-xl border border-slate-200 bg-white shadow-xs hover:shadow-md transition-shadow duration-150">
-        <div className="aspect-[4/3] w-full overflow-hidden rounded-t-xl bg-slate-100">
-          {/* Placeholder image; later you can generate from storage url */}
-          <div className="flex h-full items-center justify-center text-slate-400 text-xs">
-            {product.imagePath ? 'Image' : 'No image'}
-          </div>
+        {/* IMAGE */}
+        <div className="aspect-[4/3] w-full overflow-hidden rounded-t-xl bg-slate-100 flex items-center justify-center">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={product.title || 'Product image'}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center text-slate-400 text-xs">
+              <div className="w-10 h-10 rounded-full bg-slate-200 mb-1" />
+              <span>No image</span>
+            </div>
+          )}
         </div>
+
+        {/* TEXT */}
         <div className="px-3 py-2">
           <p className="text-xs font-medium text-slate-900 line-clamp-2 group-hover:text-indigo-600">
             {product.title}
           </p>
-          <p className="mt-1 text-sm font-semibold text-emerald-600">{price}</p>
+          <p className="mt-1 text-sm font-semibold text-emerald-600">
+            {price}
+          </p>
           {product.stock != null && (
             <p className="mt-0.5 text-[11px] text-slate-500">
               Stock: {product.stock}
