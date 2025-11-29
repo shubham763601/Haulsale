@@ -202,7 +202,7 @@ export default function SellerAddProductPage() {
         })),
       }
 
-      const resp = await fetch('../../api/proxy-create-product', {
+      const resp = await fetch('/api/proxy-create-product', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
