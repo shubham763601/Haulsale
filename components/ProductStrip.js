@@ -78,7 +78,7 @@ export default function ProductStrip({ title, subtitle, products }) {
         </Link>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-1.5">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
         {products.map((p) => (
           <ProductCard key={p.id} product={p} />
         ))}

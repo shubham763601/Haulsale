@@ -25,12 +25,12 @@ export default function ProductCard({ product }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
       {/* Image */}
-      <div className="aspect-[4/3] bg-slate-50 flex items-center justify-center overflow-hidden">
+      <div className="w-full h-40 bg-white flex items-center justify-center overflow-hidden">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={product.title || 'Product image'}
-            className="w-full h-full object-cover"
+            className="object-contain w-full h-full"
             loading="lazy"
           />
         ) : (
@@ -68,7 +68,7 @@ export default function ProductCard({ product }) {
           </div>
 
           <Link href={`/products/${product.id}`}>
-            <a className="text-xs px-3 py-1 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-50">
+            <a className="group w-36 sm:w-44 md:w-48 flex-shrink-0 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all duration-150">
               View
             </a>
           </Link>
