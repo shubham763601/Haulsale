@@ -1,155 +1,141 @@
 // pages/index.js
 import React from 'react'
-import Head from 'next/head'
-import NavBar from '../components/NavBar'
+import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
-import HeroCarousel from '../components/HeroCarousel'
-import CategoryStrip from '../components/CategoryStrip'
-import ProductStrip from '../components/ProductStrip'
+import ProductCard from '../components/ProductCard'
 
-export default function HomePage({ categories, featuredProducts, dealProducts }) {
+export default function Home({ categories, featured, fastMoving }) {
   return (
-    <>
-      <Head>
-        <title>Haullcell – Wholesale marketplace</title>
-      </Head>
+    <div className="space-y-8 pb-20">
+      {/* Hero Banner */}
+      <div className="h-40 bg-gradient-to-r from-indigo-600 to-blue-500 rounded-2xl shadow-md" />
 
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <NavBar />
+      {/* Categories */}
+      <section>
+        <div className="flex items-center justify-between px-4 mb-3">
+          <h2 className="text-lg font-semibold text-slate-900">Browse categories</h2>
+          <Link href="/categories">
+            <a className="text-sm text-indigo-600 hover:underline">View all</a>
+          </Link>
+        </div>
 
-        <main className="flex-1">
-          {/* Top hero + category strip */}
-          <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-4 lg:py-6">
-            <div className="grid gap-4 lg:grid-cols-[2.5fr,1fr]">
-              <HeroCarousel />
-              {/* Small right side promo / CTA (optional) */}
-              <div className="hidden lg:flex flex-col gap-3">
-                <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-wide opacity-80">
-                    For retailers
-                  </p>
-                  <h3 className="mt-1 font-semibold text-sm">
-                    Bulk deals every day
-                  </h3>
-                  <p className="mt-1 text-xs opacity-90">
-                    Pre-negotiated wholesale pricing from verified sellers.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
-                  <p className="text-xs font-medium text-slate-600">
-                    Want to sell on Haullcell?
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Create a seller account and list your wholesale catalogue.
-                  </p>
-                  <a
-                    href="/seller"
-                    className="mt-3 inline-flex items-center justify-center rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-amber-400"
-                  >
-                    Become a seller
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Category strip */}
-            <div className="mt-6">
-              <CategoryStrip categories={categories} />
-            </div>
+        <div className="overflow-x-auto">
+          <div className="flex gap-4 px-4">
+            {categories.map((c) => (
+              <Link key={c.id} href={`/categories/${c.id}`}>
+                <a className="flex flex-col items-center justify-center w-24">
+                  <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                    {c.name[0]}
+                  </div>
+                  <span className="text-xs mt-2 text-slate-700 text-center">
+                    {c.name}
+                  </span>
+                </a>
+              </Link>
+            ))}
           </div>
+        </div>
+      </section>
 
-          {/* Product strips */}
-          <section className="bg-white border-y border-slate-200">
-            <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-6">
-              <ProductStrip
-                title="Featured products"
-                subtitle="Popular items from verified wholesalers"
-                products={featuredProducts}
-              />
-            </div>
-          </section>
+      {/* Featured Products */}
+      <section>
+        <div className="flex items-center justify-between px-4 mb-3">
+          <h2 className="text-lg font-semibold text-slate-900">Featured products</h2>
+          <Link href="/products">
+            <a className="text-sm text-indigo-600 hover:underline">View all</a>
+          </Link>
+        </div>
 
-          <section className="bg-slate-50">
-            <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-6">
-              <ProductStrip
-                title="Deals for your shop"
-                subtitle="Fast-moving items at sharp prices"
-                products={dealProducts}
-              />
-            </div>
-          </section>
-        </main>
-
-        <footer className="border-t border-slate-200 bg-white">
-          <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-4 flex flex-col sm:flex-row justify-between text-xs text-slate-500 gap-2">
-            <p>© {new Date().getFullYear()} Haullcell. Built for Indian wholesalers.</p>
-            <p>Powered by Supabase · Secure OTP auth</p>
+        <div className="overflow-x-auto">
+          <div className="grid grid-flow-col auto-cols-[70%] gap-4 px-4">
+            {featured.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
           </div>
-        </footer>
-      </div>
-    </>
+        </div>
+      </section>
+
+      {/* Fast-moving */}
+      <section>
+        <div className="flex items-center justify-between px-4 mb-3">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Deals for your shop
+          </h2>
+          <Link href="/products">
+            <a className="text-sm text-indigo-600 hover:underline">View all</a>
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto">
+          <div className="grid grid-flow-col auto-cols-[70%] gap-4 px-4">
+            {fastMoving.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
   )
 }
 
 export async function getServerSideProps() {
-  // Load categories
-  const { data: categoriesData } = await supabase
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+  // Fetch categories
+  const { data: categories } = await supabase
     .from('categories')
     .select('id, name')
-    .order('id', { ascending: true })
-    .limit(12)
+    .order('id')
 
-  // Simple product queries – you can change filters later
+  // Fetch featured products with image + stock + category
   const { data: featured } = await supabase
     .from('products')
-    .select(
-      `
+    .select(`
       id,
       title,
       price,
-      description,
-      product_variants ( price, stock ),
-      product_images ( storage_path )
-    `
-    )
+      stock,
+      categories (
+        name
+      ),
+      product_images (
+        storage_path
+      )
+    `)
     .order('created_at', { ascending: false })
-    .limit(15)
+    .limit(10)
 
-  const { data: deals } = await supabase
+  // Fetch fast moving (same for now)
+  const { data: fastMoving } = await supabase
     .from('products')
-    .select(
-      `
+    .select(`
       id,
       title,
       price,
-      description,
-      product_variants ( price, stock ),
-      product_images ( storage_path )
-    `
-    )
-    .order('price', { ascending: true })
-    .limit(15)
+      stock,
+      categories (
+        name
+      ),
+      product_images (
+        storage_path
+      )
+    `)
+    .order('stock', { ascending: false })
+    .limit(10)
 
-  function normalizeProducts(list) {
-    if (!list) return []
-    return list.map((p) => ({
-      id: p.id,
-      title: p.title,
-      description: p.description,
-      price:
-        p.product_variants?.[0]?.price ??
-        p.price ??
-        null,
-      stock: p.product_variants?.[0]?.stock ?? null,
+  // Massage data so ProductCard can show image
+  const normalize = (list) =>
+    (list || []).map((p) => ({
+      ...p,
       imagePath: p.product_images?.[0]?.storage_path ?? null,
+      category_name: p.categories?.name ?? null,
     }))
-  }
 
   return {
     props: {
-      categories: categoriesData ?? [],
-      featuredProducts: normalizeProducts(featured),
-      dealProducts: normalizeProducts(deals),
+      categories: categories || [],
+      featured: normalize(featured),
+      fastMoving: normalize(fastMoving),
     },
   }
 }
