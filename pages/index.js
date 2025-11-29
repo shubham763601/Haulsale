@@ -7,16 +7,6 @@ import HeroCarousel from '../components/HeroCarousel'
 import CategoryStrip from '../components/CategoryStrip'
 import ProductStrip from '../components/ProductStrip'
 
-// Helper: build public URL for an object in the `public-assets` bucket
-function buildImageUrl(storagePath) {
-  if (!storagePath) return null
-  // Example final URL:
-  // https://czbenpqyprcyhkdprbuz.supabase.co/storage/v1/object/public/public-assets/product-images/atta-50kg.jpg
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, '')
-  if (!baseUrl) return null
-  return `${baseUrl}/storage/v1/object/public/public-assets/${storagePath}`
-}
-
 export default function HomePage({ categories, featuredProducts, dealProducts }) {
   return (
     <>
@@ -32,8 +22,7 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
           <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-4 lg:py-6">
             <div className="grid gap-4 lg:grid-cols-[2.5fr,1fr]">
               <HeroCarousel />
-
-              {/* Right-side promo / CTA */}
+              {/* Right side promo / CTA */}
               <div className="hidden lg:flex flex-col gap-3">
                 <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white p-4 shadow-sm">
                   <p className="text-xs uppercase tracking-wide opacity-80">
@@ -63,7 +52,7 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
               </div>
             </div>
 
-            {/* Category strip */}
+            {/* Category strip (old style you liked) */}
             <div className="mt-6">
               <CategoryStrip categories={categories} />
             </div>
@@ -103,61 +92,83 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
 }
 
 export async function getServerSideProps() {
-  // Load categories (name + id — CategoryStrip can stay as it was)
-  const { data: categoriesData, error: catError } = await supabase
+  // ---- helper: build public URL from storage_path (CDN-style) ----
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || ''
+
+  function makePublicUrl(storagePath) {
+    if (!storagePath) return null
+    // already a full URL? just return
+    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+      return storagePath
+    }
+    if (!baseUrl) return null
+
+    // storagePath could be:
+    //  - 'product-images/atta-50kg.jpg'
+    //  - 'public-assets/product-images/atta-50kg.jpg'
+    //  - 'some/other/folder/file.png'
+
+    if (storagePath.startsWith('public-assets/')) {
+      // already includes bucket name
+      return `${baseUrl}/storage/v1/object/public/${storagePath}`
+    }
+
+    // normal case: we stored just 'product-images/atta-50kg.jpg'
+    return `${baseUrl}/storage/v1/object/public/public-assets/${storagePath}`
+  }
+
+  // ---- categories ----
+  const { data: categoriesData } = await supabase
     .from('categories')
     .select('id, name')
     .order('id', { ascending: true })
     .limit(12)
 
-  if (catError) {
-    console.error('load categories', catError)
-  }
-
-  // Load products + first variant + first image
-  const commonSelect = `
+  // ---- products ----
+  const productSelect = `
     id,
     title,
     price,
     description,
+    category_id,
     product_variants ( price, stock ),
     product_images ( storage_path )
   `
 
-  const { data: featured, error: featError } = await supabase
+  const { data: featured } = await supabase
     .from('products')
-    .select(commonSelect)
+    .select(productSelect)
     .order('created_at', { ascending: false })
     .limit(15)
 
-  if (featError) {
-    console.error('load featured products', featError)
-  }
-
-  const { data: deals, error: dealsError } = await supabase
+  const { data: deals } = await supabase
     .from('products')
-    .select(commonSelect)
+    .select(productSelect)
     .order('price', { ascending: true })
     .limit(15)
 
-  if (dealsError) {
-    console.error('load deal products', dealsError)
-  }
-
+  // normalize products for UI
   function normalizeProducts(list) {
     if (!list) return []
     return list.map((p) => {
-      const rawPath = p.product_images?.[0]?.storage_path ?? null
-      const imageUrl = buildImageUrl(rawPath)
+      const firstVariant = Array.isArray(p.product_variants)
+        ? p.product_variants[0]
+        : null
+      const firstImage = Array.isArray(p.product_images)
+        ? p.product_images[0]
+        : null
 
       return {
         id: p.id,
         title: p.title,
         description: p.description,
-        price: p.product_variants?.[0]?.price ?? p.price ?? null,
-        stock: p.product_variants?.[0]?.stock ?? null,
-        imagePath: rawPath,   // old field – keep for backward compatibility
-        imageUrl,             // new full URL – use this in ProductCard if available
+        category_id: p.category_id ?? null,
+        price: firstVariant?.price ?? p.price ?? null,
+        stock: firstVariant?.stock ?? null,
+        imageUrl: firstImage ? makePublicUrl(firstImage.storage_path) : null,
+        // keep raw path just in case
+        imagePath: firstImage?.storage_path ?? null,
       }
     })
   }

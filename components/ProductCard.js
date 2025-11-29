@@ -3,25 +3,30 @@ import React from 'react'
 import Link from 'next/link'
 
 export default function ProductCard({ product }) {
-  // components/ProductCard.js
-const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
-// Automatically detect if storage_path already contains folder or not
-const rawPath = product.imagePath || ''
-const normalizedPath =
-  rawPath.includes('/') ? rawPath : `product-images/${rawPath}`
+  // Prefer fully-built URL coming from server
+  let imageUrl = product.imageUrl || null
 
-const imageUrl =
-  baseUrl && rawPath
-    ? `${baseUrl}/storage/v1/object/public/public-assets/${normalizedPath}`
-    : null
+  // Fallback: build from imagePath if imageUrl missing
+  if (!imageUrl && baseUrl && product.imagePath) {
+    const rawPath = product.imagePath
+
+    if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+      imageUrl = rawPath
+    } else if (rawPath.startsWith('public-assets/')) {
+      imageUrl = `${baseUrl}/storage/v1/object/public/${rawPath}`
+    } else {
+      // assume it's inside public-assets bucket
+      imageUrl = `${baseUrl}/storage/v1/object/public/public-assets/${rawPath}`
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
       {/* Image */}
       <div className="aspect-[4/3] bg-slate-50 flex items-center justify-center overflow-hidden">
         {imageUrl ? (
-          // real image
           <img
             src={imageUrl}
             alt={product.title || 'Product image'}
@@ -29,7 +34,6 @@ const imageUrl =
             loading="lazy"
           />
         ) : (
-          // placeholder
           <div className="flex flex-col items-center justify-center text-slate-400 text-xs">
             <div className="w-12 h-12 rounded-full bg-slate-200 mb-2" />
             <span>No image</span>
