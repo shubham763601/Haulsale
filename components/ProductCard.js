@@ -3,13 +3,18 @@ import React from 'react'
 import Link from 'next/link'
 
 export default function ProductCard({ product }) {
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  // components/ProductCard.js
+const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
-  // Build public image URL from bucket "public-assets"
-  const imageUrl =
-    baseUrl && product.imagePath
-      ? `${baseUrl}/storage/v1/object/public/public-assets/${product.imagePath}`
-      : null
+// Automatically detect if storage_path already contains folder or not
+const rawPath = product.imagePath || ''
+const normalizedPath =
+  rawPath.includes('/') ? rawPath : `product-images/${rawPath}`
+
+const imageUrl =
+  baseUrl && rawPath
+    ? `${baseUrl}/storage/v1/object/public/public-assets/${normalizedPath}`
+    : null
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
