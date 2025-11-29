@@ -1,7 +1,73 @@
+/* globals.css */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Imports */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-html,body,#__next { height:100%; }
-body { background: #071029; color: #e6eef6; font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto; }
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  font-family: 'Inter', sans-serif;
+  background-color: #f9fafb; /* Light gray - Shopify style */
+  color: #111827; /* Slate-900 */
+  line-height: 1.5;
+  min-height: 100%;
+}
+
+/* General layout */
+main {
+  width: 100%;
+  padding: 20px;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+/* Modern form styling */
+input, select, textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px;
+  transition: 0.2s ease;
+  background: white;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #6366f1; /* Indigo theme */
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.3);
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: #4f46e5; /* indigo-600 */
+  color: white;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #4338ca;
+}
+
+/* Cards (Admin + Seller dashboards) */
+.card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* Utility classes */
+.text-muted {
+  color: #6b7280;
+}

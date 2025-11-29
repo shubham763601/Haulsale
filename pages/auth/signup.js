@@ -1,126 +1,129 @@
 // pages/auth/signup.js
+import React, { useState, useContext, useEffect } from 'react'
 import Head from 'next/head'
-import React, { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/router'
-import NavBar from '../../components/NavBar'
 import { supabase } from '../../lib/supabaseClient'
+import UserContext from '../../lib/userContext'
+import NavBar from '../../components/NavBar'
 
 export default function SignupPage() {
   const router = useRouter()
+  const { user, setUser } = useContext(UserContext)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [otp, setOtp] = useState('')
-  const [phase, setPhase] = useState('enter') // enter -> otp-sent -> verified
+  const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [info, setInfo] = useState(null)
 
-  async function handleRequestOtp(e) {
-    e?.preventDefault()
+  useEffect(() => {
+    if (user) router.push('/')
+  }, [user])
+
+  async function handleSignup(e) {
+    e.preventDefault()
     setError(null)
-    setInfo(null)
-    if (!email) return setError('Enter an email')
-
     setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: true }
-      })
-      if (error) throw error
-      setPhase('otp-sent')
-      setInfo('OTP sent to your email. Use the code from the email.')
-    } catch (err) {
-      setError(err.message || String(err))
-    } finally {
+
+    // 1️⃣ Create user with supabase auth
+    const { data, error: signupErr } = await supabase.auth.signUp({
+      email,
+      password
+    })
+
+    if (signupErr) {
+      setError(signupErr.message)
       setLoading(false)
+      return
     }
-  }
 
-  async function handleVerifyAndSignup(e) {
-    e?.preventDefault()
-    setError(null); setInfo(null)
-    if (!email || !password || !otp) return setError('Provide email, password and OTP')
+    const newUser = data?.user
 
-    setLoading(true)
-    try {
-      const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-        email, token: otp, type: 'email'
-      })
-      if (verifyError) throw verifyError
+    if (newUser) {
+      // 2️⃣ Insert profile row
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .insert({
+          id: newUser.id,
+          full_name: fullName,
+          email,
+          role: 'buyer'
+        })
 
-      const sessionUser = verifyData?.user ?? verifyData?.session?.user ?? null
-      if (sessionUser) {
-        const { data: updData, error: updErr } = await supabase.auth.updateUser({ password })
-        if (updErr) {
-          console.warn('Password update error (non-fatal):', updErr)
-        }
-        try {
-          await supabase.from('profiles').upsert({
-            id: sessionUser.id,
-            email: sessionUser.email,
-            created_at: new Date().toISOString()
-          }, { returning: 'minimal' })
-        } catch (e) { console.warn('profile upsert warning', e) }
-      } else {
-        console.warn('No session available after verifyOtp; password not set automatically.')
+      if (profileErr) {
+        console.error('profile insert error', profileErr)
       }
 
-      setPhase('verified'); setInfo('Signup successful. Redirecting...')
-      setTimeout(() => router.push('/'), 1200)
-    } catch (err) {
-      setError(err.message || String(err))
-    } finally {
-      setLoading(false)
+      setUser(newUser)
+      router.push('/')
     }
+
+    setLoading(false)
   }
 
   return (
     <>
-      <Head><title>Create account | Haullcell</title></Head>
+      <Head><title>Create account — Haulcell</title></Head>
       <NavBar />
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white/5 backdrop-blur rounded-lg p-8 shadow-md">
-          <h1 className="text-2xl font-bold mb-4 text-white">Create account</h1>
 
-          {phase === 'enter' && (
-            <form onSubmit={handleRequestOtp} className="space-y-4">
-              <label className="block">
-                <span className="text-sm text-gray-300">Email</span>
-                <input className="mt-1 block w-full rounded border px-3 py-2" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-              </label>
+      <main className="flex min-h-[70vh] items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="mb-2 text-xl font-semibold text-slate-900">Create account</h1>
+          <p className="mb-6 text-sm text-slate-600">
+            Sign up to start ordering from wholesalers.
+          </p>
 
-              <label className="block">
-                <span className="text-sm text-gray-300">Create password</span>
-                <input className="mt-1 block w-full rounded border px-3 py-2" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-              </label>
+          <form onSubmit={handleSignup} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Full name</label>
+              <input
+                type="text"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                required
+              />
+            </div>
 
-              <div className="flex items-center justify-between">
-                <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-indigo-600">
-                  {loading ? 'Sending OTP...' : 'Request OTP'}
-                </button>
-                <a href="/auth/login" className="text-sm">Already have an account?</a>
-              </div>
-            </form>
-          )}
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Email</label>
+              <input
+                type="email"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+              />
+            </div>
 
-          {phase === 'otp-sent' && (
-            <form onSubmit={handleVerifyAndSignup} className="space-y-4">
-              <p className="text-sm text-gray-300">Enter the OTP sent to <strong className="text-white">{email}</strong></p>
-              <label className="block">
-                <span className="text-sm text-gray-300">OTP</span>
-                <input className="mt-1 block w-full rounded border px-3 py-2" value={otp} onChange={e => setOtp(e.target.value)} required />
-              </label>
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Password</label>
+              <input
+                type="password"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
+            </div>
 
-              <div className="flex items-center gap-3">
-                <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-green-600">{loading ? 'Verifying...' : 'Verify & Create account'}</button>
-                <button type="button" onClick={() => setPhase('enter')} className="px-3 py-2 rounded bg-gray-700">Change email / password</button>
-              </div>
-            </form>
-          )}
+            {error && <p className="text-sm text-rose-600">{error}</p>}
 
-          {info && <p className="text-green-400 text-sm mt-2">{info}</p>}
-          {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            >
+              {loading ? 'Signing up...' : 'Create account'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center text-xs text-slate-600">
+            Already have an account?{' '}
+            <Link href="/auth/login">
+              <a className="font-medium text-indigo-600 hover:text-indigo-500">Sign in</a>
+            </Link>
+          </div>
         </div>
       </main>
     </>

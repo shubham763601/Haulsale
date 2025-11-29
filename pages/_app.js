@@ -1,34 +1,46 @@
 // pages/_app.js
-import React, { useEffect, useState } from 'react'
-import UserContext from '../lib/userContext'
-import { supabase } from '../lib/supabaseClient'
 import '../styles/globals.css'
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import UserContext from '../lib/userContext'
 import { CartProvider } from '../lib/cartContext'
 
 function MyApp({ Component, pageProps }) {
   const [user, setUser] = useState(null)
+  const [initialised, setInitialised] = useState(false)
 
+  // Load current session once on app start
   useEffect(() => {
     let mounted = true
 
-    // Get current session on mount
-    supabase.auth.getSession()
-      .then(({ data }) => {
-        if (!mounted) return
-        setUser(data?.session?.user ?? null)
-      })
-      .catch(() => {})
+    async function loadSession() {
+      const { data } = await supabase.auth.getSession()
+      if (!mounted) return
+      setUser(data?.session?.user ?? null)
+      setInitialised(true)
+    }
 
-    // Subscribe to auth changes (sign in / out)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    loadSession()
+
+    // subscribe to auth changes (login/logout from any tab)
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
 
     return () => {
       mounted = false
-      try { listener?.subscription?.unsubscribe() } catch (e) {}
+      sub?.subscription?.unsubscribe?.()
     }
   }, [])
+
+  // Optional: simple splash while checking auth once
+  if (!initialised) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+        Loading...
+      </div>
+    )
+  }
 
   return (
     <UserContext.Provider value={{ user, setUser }}>

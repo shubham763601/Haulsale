@@ -1,67 +1,101 @@
 // pages/auth/login.js
+import React, { useState, useContext, useEffect } from 'react'
 import Head from 'next/head'
-import React, { useState, useContext } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/router'
-import NavBar from '../../components/NavBar'
 import { supabase } from '../../lib/supabaseClient'
 import UserContext from '../../lib/userContext'
+import NavBar from '../../components/NavBar'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { setUser } = useContext(UserContext)
+  const { user, setUser } = useContext(UserContext)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
 
-  async function handleSignIn(e) {
+  // If logged in — redirect away
+  useEffect(() => {
+    if (user) router.push('/')
+  }, [user])
+
+  async function handleLogin(e) {
     e.preventDefault()
-    setError(null)
     setLoading(true)
-    try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+    setError(null)
 
-      if (signInError) {
-        setError(signInError.message || 'Sign in failed')
-        setLoading(false)
-        return
-      }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
 
-      const user = data?.user ?? data?.session?.user ?? null
-      setUser(user)
+    if (error) {
+      setError(error.message)
+    } else if (data?.user) {
+      setUser(data.user)
       router.push('/')
-    } catch (err) {
-      setError(err.message || String(err))
-    } finally {
-      setLoading(false)
     }
+
+    setLoading(false)
   }
 
   return (
     <>
-      <Head><title>Sign in | Haullcell</title></Head>
+      <Head><title>Sign in — Haulcell</title></Head>
       <NavBar />
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white/5 backdrop-blur rounded-lg p-8 shadow-md">
-          <h1 className="text-2xl font-bold mb-4 text-white">Sign in</h1>
-          <form onSubmit={handleSignIn} className="space-y-4">
-            <label className="block"><span className="text-sm text-gray-300">Email</span>
-              <input className="mt-1 block w-full rounded border px-3 py-2" value={email} onChange={e => setEmail(e.target.value)} type="email" required />
-            </label>
-            <label className="block"><span className="text-sm text-gray-300">Password</span>
-              <input className="mt-1 block w-full rounded border px-3 py-2" value={password} onChange={e => setPassword(e.target.value)} type="password" required />
-            </label>
-            <div className="flex items-center justify-between">
-              <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-indigo-600">
-                {loading ? 'Signing in...' : 'Sign in'}
-              </button>
-              <a href="/auth/signup" className="text-sm">Create account</a>
+
+      <main className="flex min-h-[70vh] items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="mb-2 text-xl font-semibold text-slate-900">Welcome back</h1>
+          <p className="mb-6 text-sm text-slate-600">
+            Enter your details to access your account.
+          </p>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Email</label>
+              <input
+                type="email"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+              />
             </div>
-            {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Password</label>
+              <input
+                type="password"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            {error && (
+              <p className="text-sm text-rose-600">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            >
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
           </form>
+
+          <div className="mt-6 flex justify-between text-xs text-slate-600">
+            <Link href="/auth/forgot-password">
+              <a className="hover:text-indigo-600">Forgot Password?</a>
+            </Link>
+            <Link href="/auth/signup">
+              <a className="hover:text-indigo-600">Create Account</a>
+            </Link>
+          </div>
         </div>
       </main>
     </>
