@@ -1,117 +1,237 @@
 // components/NavBar.js
-import React, { useContext } from 'react'
+import React, { useContext, useState, useEffect } from 'react'
 import Link from 'next/link'
-import UserContext from '../lib/userContext'
-import { supabase } from '../lib/supabaseClient'
 import { useRouter } from 'next/router'
-import CartIcon from './CartIcon'
+import { supabase } from '../lib/supabaseClient'
+import UserContext from '../lib/userContext'
+import { CartContext } from '../lib/cartContext'
 
 export default function NavBar() {
-  const { user, setUser } = useContext(UserContext)
   const router = useRouter()
+  const { user, setUser } = useContext(UserContext)
+  const { items } = useContext(CartContext) || { items: [] }
 
-  const handleSignOut = async () => {
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // optional: keep user in sync with Supabase session on first load
+  useEffect(() => {
+    let mounted = true
+    async function loadSession() {
+      const { data } = await supabase.auth.getSession()
+      if (!mounted) return
+      if (data?.session?.user && !user) {
+        setUser(data.session.user)
+      }
+    }
+    loadSession()
+    return () => { mounted = false }
+  }, [])
+
+  async function handleSignOut() {
     await supabase.auth.signOut()
     setUser(null)
     router.push('/')
   }
 
+  const cartCount = items?.reduce((sum, it) => sum + (it.qty || 0), 0) || 0
+
+  const links = [
+    { href: '/', label: 'Marketplace' },
+    { href: '/categories', label: 'Categories' },
+    { href: '/dashboard/seller', label: 'Seller' },  // we’ll flesh this later
+  ]
+
   return (
-    <nav className="w-full bg-transparent border-b border-gray-800">
-      <div className="max-w-6xl mx-auto flex items-center gap-4 p-4">
-        {/* Left: brand */}
-        <div className="flex items-center gap-3">
-          <Link href="/">
-            <a className="flex items-center gap-3 group">
-              {/* logo circle */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-bold shadow">
-                H
-              </div>
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+        {/* Left: Logo + primary nav */}
+        <div className="flex items-center gap-8">
+          <button
+            onClick={() => router.push('/')}
+            className="flex items-center gap-2 text-slate-900"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white text-sm font-bold">
+              Hc
+            </div>
+            <span className="text-base font-semibold tracking-tight">
+              Haulcell
+            </span>
+          </button>
 
-              {/* brand name hidden on very small screens */}
-              <div className="flex flex-col">
-                <span className="text-lg font-bold text-white leading-none">Haullcell</span>
-                <span className="text-xs text-gray-400 -mt-0.5 hidden md:block">Wholesale marketplace</span>
-              </div>
-            </a>
-          </Link>
-        </div>
-
-        {/* Middle: primary nav (hidden on small screens) */}
-        <div className="flex-1 hidden md:flex items-center gap-6 ml-6">
-          <Link href="/products">
-            <a className="flex items-center gap-2 py-2 px-3 rounded hover:bg-white/5 transition" title="Browse products">
-              {/* products / catalog icon */}
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-200" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-                <path d="M2 6a2 2 0 012-2h3v10H4a2 2 0 01-2-2V6zM9 4h7a2 2 0 012 2v6a2 2 0 01-2 2H9V4z" />
-              </svg>
-              <span className="text-sm text-gray-200">Products</span>
-            </a>
-          </Link>
-
-          <Link href="/seller">
-            <a className="flex items-center gap-2 py-2 px-3 rounded hover:bg-white/5 transition" title="Sell on Haullcell">
-              {/* seller icon */}
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-200" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-                <path d="M4 3h12v2H4V3zM3 8h14v9H3V8z" />
-              </svg>
-              <span className="text-sm text-gray-200">Sell</span>
-            </a>
-          </Link>
-
-          <Link href="/about">
-            <a className="flex items-center gap-2 py-2 px-3 rounded hover:bg-white/5 transition" title="About Haullcell">
-              {/* info icon */}
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-200" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-                <path d="M9 9h2v6H9V9zM9 5h2v2H9V5z" />
-              </svg>
-              <span className="text-sm text-gray-200">About</span>
-            </a>
-          </Link>
-        </div>
-
-        {/* Right: actions */}
-        <div className="ml-auto flex items-center gap-3">
-          {/* cart */}
-          <CartIcon />
-
-          {/* account / auth */}
-          {user ? (
-            <>
-              <Link href="/account">
+          {/* Desktop nav */}
+          <div className="hidden items-center gap-4 text-sm font-medium text-slate-600 sm:flex">
+            {links.map(link => (
+              <Link key={link.href} href={link.href}>
                 <a
-                  className="flex items-center gap-2 px-3 py-1 rounded hover:bg-white/5 transition"
-                  title="Account"
+                  className={
+                    router.pathname === link.href
+                      ? 'text-slate-900'
+                      : 'hover:text-slate-900'
+                  }
                 >
-                  {/* user icon */}
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-200" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-                    <path d="M10 10a4 4 0 100-8 4 4 0 000 8zM2 18a8 8 0 0116 0H2z" />
-                  </svg>
-
-                  <span className="hidden sm:inline text-sm text-gray-200 truncate max-w-[12rem]">
-                    {user.email}
-                  </span>
+                  {link.label}
                 </a>
               </Link>
+            ))}
+          </div>
+        </div>
 
-              <button onClick={handleSignOut} className="px-3 py-1 rounded bg-red-600 hover:opacity-90 text-white">
+        {/* Right: Cart + account + mobile toggle */}
+        <div className="flex items-center gap-3">
+          {/* Cart */}
+          <button
+            onClick={() => router.push('/cart')}
+            className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white hover:border-indigo-400"
+            aria-label="Cart"
+          >
+            {/* simple cart icon */}
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4 text-slate-600"
+              aria-hidden="true"
+            >
+              <path
+                d="M7 4h-2l-1 2m0 0 2.2 9.2A1 1 0 0 0 7.2 16h9.6a1 1 0 0 0 1-.8L19 8H5M9 20a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm8 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                {cartCount}
+              </span>
+            )}
+          </button>
+
+          {/* Auth / user */}
+          {user ? (
+            <div className="hidden items-center gap-3 sm:flex">
+              <button
+                onClick={() => router.push('/account')}
+                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-indigo-400"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700">
+                  {user.email?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <span className="max-w-[120px] truncate">
+                  {user.email}
+                </span>
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+              >
                 Sign out
               </button>
-            </>
+            </div>
           ) : (
-            <>
-              <Link href="/auth/login">
-                <a className="px-3 py-1 rounded hover:bg-white/5 transition text-sm">Sign in</a>
-              </Link>
-
-              <Link href="/auth/signup">
-                <a className="px-3 py-1 rounded bg-indigo-600 hover:opacity-90 text-white">Sign up</a>
-              </Link>
-            </>
+            <div className="hidden items-center gap-2 sm:flex">
+              <button
+                onClick={() => router.push('/auth/login')}
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-indigo-400"
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => router.push('/auth/signup')}
+                className="rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
+              >
+                Sign up
+              </button>
+            </div>
           )}
+
+          {/* Mobile menu toggle */}
+          <button
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:border-indigo-400 sm:hidden"
+            onClick={() => setMobileOpen(v => !v)}
+            aria-label="Toggle navigation"
+          >
+            {mobileOpen ? (
+              <span className="text-lg leading-none">&times;</span>
+            ) : (
+              <span className="text-xl leading-none">≡</span>
+            )}
+          </button>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* Mobile nav */}
+      {mobileOpen && (
+        <div className="border-t border-slate-200 bg-white sm:hidden">
+          <div className="mx-auto max-w-6xl px-4 py-2 text-sm">
+            <div className="flex flex-col gap-2 py-2">
+              {links.map(link => (
+                <Link key={link.href} href={link.href}>
+                  <a
+                    onClick={() => setMobileOpen(false)}
+                    className={`
+                      block rounded px-2 py-1 
+                      ${router.pathname === link.href
+                        ? 'bg-slate-100 text-slate-900'
+                        : 'text-slate-700 hover:bg-slate-50'}
+                    `}
+                  >
+                    {link.label}
+                  </a>
+                </Link>
+              ))}
+            </div>
+
+            <div className="mt-3 border-t border-slate-200 pt-3 flex flex-col gap-2">
+              {user ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setMobileOpen(false)
+                      router.push('/account')
+                    }}
+                    className="flex items-center gap-2 rounded px-2 py-1 text-slate-700 hover:bg-slate-50"
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700">
+                      {user.email?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <span className="truncate">{user.email}</span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setMobileOpen(false)
+                      await handleSignOut()
+                    }}
+                    className="rounded px-2 py-1 text-left text-slate-700 hover:bg-slate-50"
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setMobileOpen(false)
+                      router.push('/auth/login')
+                    }}
+                    className="rounded px-2 py-1 text-left text-slate-700 hover:bg-slate-50"
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMobileOpen(false)
+                      router.push('/auth/signup')
+                    }}
+                    className="rounded px-2 py-1 text-left text-slate-700 hover:bg-slate-50"
+                  >
+                    Create account
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
   )
 }
-
