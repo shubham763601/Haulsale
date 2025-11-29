@@ -1,251 +1,251 @@
 // pages/index.js
 import React, { useEffect, useState } from 'react'
 import Head from 'next/head'
-import Link from 'next/link'
+import { useRouter } from 'next/router'
 import NavBar from '../components/NavBar'
 import { supabase } from '../lib/supabaseClient'
 
 export default function HomePage() {
+  const router = useRouter()
   const [categories, setCategories] = useState([])
-  const [featured, setFeatured] = useState([])
+  const [featuredProducts, setFeaturedProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    let mounted = true
+    let cancelled = false
 
     async function load() {
       setLoading(true)
       setError(null)
       try {
-        // Load categories
-        const { data: catData, error: catErr } = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name', { ascending: true })
+        const [catRes, prodRes] = await Promise.all([
+          supabase
+            .from('categories')
+            .select('id, name')
+            .order('id', { ascending: true })
+            .limit(6),
+          supabase
+            .from('products')
+            .select('id, title, price, category_id')
+            .order('created_at', { ascending: false })
+            .limit(8),
+        ])
 
-        if (catErr) throw catErr
+        if (catRes.error) throw catRes.error
+        if (prodRes.error) throw prodRes.error
 
-        // Load featured products (first few active products)
-        const { data: prodData, error: prodErr } = await supabase
-          .from('products')
-          .select('id, title, price, category_id')
-          .order('created_at', { ascending: false })
-          .limit(12)
-
-        if (prodErr) throw prodErr
-
-        if (!mounted) return
-        setCategories(catData || [])
-        setFeatured(prodData || [])
+        if (!cancelled) {
+          setCategories(catRes.data || [])
+          setFeaturedProducts(prodRes.data || [])
+        }
       } catch (err) {
-        console.error('load homepage data', err)
-        if (mounted) setError('Failed to load marketplace data')
+        console.error('load homepage', err)
+        if (!cancelled) setError('Failed to load marketplace data')
       } finally {
-        if (mounted) setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     load()
     return () => {
-      mounted = false
+      cancelled = true
     }
   }, [])
-
-  function formatPrice(p) {
-    if (p == null) return '—'
-    const num = Number(p)
-    if (Number.isNaN(num)) return '—'
-    return `₹${num.toFixed(2)}`
-  }
 
   return (
     <>
       <Head>
-        <title>Haulcell — Wholesale marketplace</title>
+        <title>Haullcell — Wholesale marketplace</title>
       </Head>
+
+      {/* Top navigation */}
       <NavBar />
 
+      {/* Main content */}
       <main className="min-h-screen bg-slate-50">
         {/* Hero */}
-        <section className="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50">
-          <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 sm:flex-row sm:items-center sm:px-6 lg:py-14">
-            <div className="flex-1 space-y-4">
-              <div className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-100">
-                B2B wholesale · Built on Supabase
-              </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-                One dashboard for all your
-                <span className="text-indigo-600"> shop supplies.</span>
-              </h1>
-              <p className="max-w-xl text-sm text-slate-600 sm:text-base">
-                Haulcell connects local retailers with verified wholesalers. Discover
-                better prices, live stock, and simple ordering — all in one place.
-              </p>
+        <section className="border-b border-slate-200 bg-white">
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14 lg:py-16">
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-center">
+              <div className="flex-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-indigo-600">
+                  B2B wholesale · Built on Supabase
+                </p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl lg:text-5xl">
+                  One dashboard for all your shop supplies.
+                </h1>
+                <p className="mt-4 max-w-xl text-slate-600">
+                  Haullcell connects local retailers with verified wholesalers.
+                  Discover better prices, live stock and simple ordering — all in one place.
+                </p>
 
-              <div className="flex flex-wrap gap-3 pt-2">
-                <Link href="/auth/signup">
-                  <a className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-                    Create new account
-                  </a>
-                </Link>
-                <Link href="/dashboard/seller">
-                  <a className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:border-indigo-400">
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    onClick={() => router.push('/products')}
+                    className="btn-primary"
+                  >
+                    Browse products
+                  </button>
+                  <button
+                    onClick={() => router.push('/seller')}
+                    className="btn-secondary"
+                  >
                     Become a seller
-                  </a>
-                </Link>
-              </div>
-
-              <div className="pt-3 text-[11px] text-slate-500">
-                No setup fees · UPI ready · Built for Indian wholesalers
-              </div>
-            </div>
-
-            <div className="flex-1">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>Live categories</span>
-                  <span>Fast-moving items</span>
+                  </button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    {categories.slice(0, 4).map(cat => (
-                      <div
-                        key={cat.id}
-                        className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-700"
-                      >
-                        <span>{cat.name}</span>
-                        <span className="text-[10px] text-slate-400">View</span>
-                      </div>
-                    ))}
-                    {categories.length === 0 && (
-                      <div className="rounded-xl bg-slate-50 px-3 py-6 text-xs text-slate-500">
-                        Categories will appear here once created.
-                      </div>
-                    )}
+
+                <dl className="mt-6 grid gap-4 text-sm text-slate-500 sm:grid-cols-3">
+                  <div>
+                    <dt className="font-medium text-slate-700">No setup fees</dt>
+                    <dd>Start listing in minutes.</dd>
                   </div>
-                  <div className="space-y-2">
-                    {featured.slice(0, 4).map(p => (
-                      <div
-                        key={p.id}
-                        className="rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs"
-                      >
-                        <div className="truncate text-slate-800">{p.title}</div>
-                        <div className="text-[11px] text-slate-500">
-                          {formatPrice(p.price)}
-                        </div>
-                      </div>
-                    ))}
-                    {featured.length === 0 && (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-xs text-slate-500">
-                        Featured products will appear here after sellers add them.
-                      </div>
-                    )}
+                  <div>
+                    <dt className="font-medium text-slate-700">UPI & bank-ready</dt>
+                    <dd>Built for Indian wholesalers.</dd>
                   </div>
+                  <div>
+                    <dt className="font-medium text-slate-700">Admin tools</dt>
+                    <dd>Approve sellers, track orders.</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* Right side highlight card */}
+              <div className="flex-1">
+                <div className="card bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg">
+                  <p className="text-sm font-semibold uppercase tracking-wide opacity-80">
+                    Why Haullcell?
+                  </p>
+                  <ul className="mt-4 space-y-2 text-sm">
+                    <li>• B2B flows — MOQ, variants & seller pricing</li>
+                    <li>• Supabase auth with OTP & password</li>
+                    <li>• Pluggable payments & seller dashboards</li>
+                    <li>• Built to scale on Postgres</li>
+                  </ul>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Error banner */}
-        {error && (
-          <div className="bg-rose-50 border-y border-rose-100">
-            <div className="mx-auto max-w-6xl px-4 py-3 text-sm text-rose-700 sm:px-6">
-              {error}
-            </div>
-          </div>
-        )}
-
-        {/* Categories strip */}
-        <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">
+        {/* Browse by category */}
+        <section className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold text-slate-900">
               Browse by category
             </h2>
-            <Link href="/categories">
-              <a className="text-xs font-medium text-indigo-600 hover:text-indigo-500">
-                View all
-              </a>
-            </Link>
+            <button
+              onClick={() => router.push('/categories')}
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+            >
+              View all
+            </button>
           </div>
 
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {categories.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  // later we can route to /categories/[id]
-                }}
-                className="flex min-w-[110px] flex-col items-start rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs hover:border-indigo-400"
-              >
-                <div className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-[11px] font-semibold text-indigo-700">
-                  {cat.name?.[0]?.toUpperCase() || '?'}
-                </div>
-                <div className="truncate text-slate-800">{cat.name}</div>
-                <div className="text-[10px] text-slate-500">
-                  Wholesale deals
-                </div>
-              </button>
-            ))}
-            {categories.length === 0 && !loading && (
-              <div className="text-xs text-slate-500">
-                No categories yet. Create them from admin.
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Featured products grid */}
-        <section className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Featured products
-            </h2>
-            <Link href="/products">
-              <a className="text-xs font-medium text-indigo-600 hover:text-indigo-500">
-                View catalog
-              </a>
-            </Link>
-          </div>
+          {error && (
+            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
 
           {loading ? (
-            <div className="text-sm text-slate-500">Loading products…</div>
-          ) : featured.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
-              No products have been added yet. Once sellers publish items,
-              they’ll show up here.
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              {[1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  className="h-20 animate-pulse rounded-xl bg-slate-200"
+                />
+              ))}
             </div>
+          ) : categories.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">
+              No categories yet. Admin can add categories from the dashboard.
+            </p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {featured.map(p => (
-                <Link key={p.id} href={`/products/${p.id}`}>
-                  <a className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-3 text-xs hover:border-indigo-400 hover:shadow-sm">
-                    <div className="mb-2 flex h-28 w-full items-center justify-center rounded-xl bg-slate-50 text-[11px] text-slate-400">
-                      {/* Later: show product image from product_images */}
-                      Product image
-                    </div>
-                    <div className="flex-1">
-                      <div className="mb-1 line-clamp-2 text-[13px] font-medium text-slate-900 group-hover:text-indigo-600">
-                        {p.title}
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {formatPrice(p.price)}
-                      </div>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[11px] text-emerald-600">
-                        In stock
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        View details →
-                      </span>
-                    </div>
-                  </a>
-                </Link>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3 md:grid-cols-4">
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() =>
+                    router.push(`/products?category_id=${cat.id}`)
+                  }
+                  className="card flex flex-col items-start hover:border-indigo-200 hover:shadow-md"
+                >
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600">
+                    {cat.name.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="mt-3 text-left">
+                    <p className="text-sm font-medium text-slate-900">
+                      {cat.name}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      View products in this category
+                    </p>
+                  </div>
+                </button>
               ))}
             </div>
           )}
+        </section>
+
+        {/* Featured products */}
+        <section className="border-t border-slate-200 bg-white">
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Featured products
+              </h2>
+              <button
+                onClick={() => router.push('/products')}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+              >
+                Browse all
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div
+                    key={i}
+                    className="h-40 animate-pulse rounded-xl bg-slate-100"
+                  />
+                ))}
+              </div>
+            ) : featuredProducts.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500">
+                No products yet. Once sellers add inventory, it will appear here.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {featuredProducts.map(p => (
+                  <div
+                    key={p.id}
+                    className="card flex cursor-pointer flex-col justify-between hover:border-indigo-200 hover:shadow-md"
+                    onClick={() => router.push(`/products/${p.id}`)}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 line-clamp-2">
+                        {p.title}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Category #{p.category_id || '—'}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-900">
+                        ₹{Number(p.price || 0).toFixed(2)}
+                      </p>
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        In stock
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </main>
     </>
