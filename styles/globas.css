@@ -1,0 +1,52 @@
+/* globals.css  — for Tailwind 3.4.12 */
+
+/* Tailwind layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+@layer base {
+  html, body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  }
+
+  main {
+    @apply w-full;
+  }
+
+  a {
+    @apply text-indigo-600 hover:text-indigo-700;
+  }
+}
+
+/* Reusable components (buttons, cards, etc.) */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg
+           bg-indigo-600 text-white text-sm font-semibold shadow-sm
+           hover:bg-indigo-700
+           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg
+           border border-slate-300 bg-white text-sm font-medium text-slate-800
+           hover:bg-slate-50
+           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
+  }
+
+  .card {
+    @apply bg-white border border-slate-200 rounded-2xl p-5 shadow-sm;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm
+           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500;
+  }
+
+  .page-shell {
+    @apply max-w-6xl mx-auto px-4 py-6 sm:py-10;
+  }
+}
