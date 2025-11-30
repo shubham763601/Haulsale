@@ -1,237 +1,225 @@
-// pages/products/[id].js
-import { useState } from "react";
-import Head from "next/head";
-import { supabase } from "../../lib/supabaseClient";
-import NavBar from "../../components/NavBar";
-import ProductCard from "../../components/ProductCard";
-import { useCart } from "../../context/CartContext"; // 🔥 FIXED
+// pages/products/index.js
+import React, { useState, useMemo } from 'react'
+import Head from 'next/head'
+import { useRouter } from 'next/router'
+import Link from 'next/link'
+import { supabase } from '../../lib/supabaseClient'
+import NavBar from '../../components/NavBar'
+import { useCart } from "../../context/CartContext" // 🔥 FIXED
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 
 function makePublicUrl(path) {
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!path || !baseUrl) return null;
-  if (path.startsWith("http")) return path;
-  return `${baseUrl}/storage/v1/object/public/public-assets/${path}`;
+  if (!path || !SUPABASE_URL) return null
+  if (path.startsWith('http')) return path
+  return `${SUPABASE_URL}/storage/v1/object/public/public-assets/${path}`
 }
 
-export default function ProductPage({ product, similarProducts, reviews }) {
-  const [qty, setQty] = useState(1);
-  const { addItem } = useCart(); // 🔥 Valid now
+// ──────────────────────────
+// Product Row (Horizontal UI)
+// ──────────────────────────
+function ProductRow({ product }) {
+  const { addItem } = useCart()
+  const [qty, setQty] = useState(1)
+  const [isAdding, setIsAdding] = useState(false)
 
-  const imageUrl = product.imageUrl || makePublicUrl(product.imagePath);
+  const imageUrl = product.imageUrl || makePublicUrl(product.imagePath)
+
+  const price = Number(product.price || 0)
+  const mrp = Number(product.mrp || 0)
+  const hasDiscount = mrp > price
+  const offPct = hasDiscount ? Math.round(((mrp - price) / mrp) * 100) : null
 
   function handleAddToCart() {
+    if (isAdding) return
+
     addItem({
       product_id: product.id,
-      variant_id: null,
       title: product.title,
-      price: product.price,
-      mrp: product.mrp,
       imageUrl,
+      price,
+      mrp,
       qty,
-      seller_id: product.seller_id || null,
-      stock: product.stock ?? null,
-    });
-    alert("Added to cart!");
+      stock: product.stock,
+    })
+
+    setIsAdding(true)
+    setTimeout(() => setIsAdding(false), 500)
+  }
+
+  return (
+    <div className="mb-3 border rounded-2xl bg-white p-3 shadow-sm hover:shadow-md">
+      <div className="flex gap-4">
+        {/* IMAGE */}
+        <Link href={`/products/${product.id}`}>
+          <a className="flex-shrink-0">
+            <div className="h-24 w-24 rounded-lg bg-slate-50 border overflow-hidden flex items-center justify-center">
+              {imageUrl ? (
+                <img className="object-contain max-h-full" src={imageUrl} />
+              ) : (
+                <span className="text-xs text-slate-400">No Image</span>
+              )}
+              {offPct && (
+                <div className="absolute top-1 left-1 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">
+                  {offPct}% OFF
+                </div>
+              )}
+            </div>
+          </a>
+        </Link>
+
+        {/* DETAILS */}
+        <div className="flex flex-1 flex-col justify-center">
+          <Link href={`/products/${product.id}`}>
+            <a className="font-medium text-sm text-slate-900 line-clamp-2 hover:text-indigo-600">
+              {product.title}
+            </a>
+          </Link>
+
+          {product.rating_count > 0 && (
+            <div className="mt-1 flex items-center gap-1 text-xs">
+              <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">
+                {product.rating.toFixed(1)} ★
+              </span>
+              <span className="text-slate-400">({product.rating_count})</span>
+            </div>
+          )}
+
+          <p className="text-xs text-slate-500 line-clamp-1">
+            {product.description}
+          </p>
+
+          <div className="mt-1 flex gap-2 items-baseline">
+            <span className="text-emerald-600 font-semibold text-sm">₹{price.toFixed(0)}</span>
+            {hasDiscount && (
+              <>
+                <span className="line-through text-xs text-slate-400">₹{mrp}</span>
+                <span className="text-[11px] font-semibold text-emerald-600">{offPct}% off</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ADD SIDE */}
+        <div className="flex flex-col justify-center items-end gap-2">
+          {/* QTY SELECT */}
+          <div className="flex items-center gap-2 border rounded-full bg-slate-50 px-2 py-1">
+            <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
+            <span className="w-6 text-center text-xs">{qty}</span>
+            <button onClick={() => setQty(q => q + 1)}>+</button>
+          </div>
+
+          {/* ADD TO CART */}
+          <button
+            onClick={handleAddToCart}
+            className={`${isAdding ? "bg-emerald-600 scale-95" : "bg-indigo-600 hover:bg-indigo-500"} 
+              px-4 py-1.5 rounded-full text-[11px] font-semibold text-white shadow transition-all`}
+          >
+            {isAdding ? "Added ✓" : "Add to cart"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ──────────────────────────
+// Main Products Page
+// ──────────────────────────
+export default function ProductsPage({ products, initialQ, categoryName }) {
+  const router = useRouter()
+  const [search, setSearch] = useState(initialQ)
+  const [sortMode, setSortMode] = useState('relevance') 
+
+  const sortedProducts = useMemo(() => {
+    let arr = [...products]
+    if (sortMode === "top-rated") arr.sort((a,b)=>b.rating-a.rating)
+    if (sortMode === "low-price") arr.sort((a,b)=>a.price-b.price)
+    return arr
+  }, [products, sortMode])
+
+  function searchSubmit(e) {
+    e.preventDefault()
+    const params = new URLSearchParams(router.query)
+    search ? params.set("q", search) : params.delete("q")
+    router.push(`/products?${params.toString()}`)
   }
 
   return (
     <>
-      <Head>
-        <title>{product.title} – Haullcell</title>
-      </Head>
+      <Head><title>Products – Haulcell</title></Head>
+      <NavBar />
 
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <NavBar />
+      <main className="max-w-6xl mx-auto px-3 py-4">
+        {/* SEARCH BAR */}
+        <form
+          onSubmit={searchSubmit}
+          className="bg-white rounded-full border px-4 py-2 mb-4 flex"
+        >
+          <input
+            className="flex-1 outline-none"
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+            placeholder="Search products..."
+          />
+        </form>
 
-        <main className="flex-1 mx-auto max-w-6xl px-4 py-6">
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* IMAGE */}
-            <div className="rounded-2xl bg-white border shadow-sm p-4 flex items-center justify-center">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={product.title}
-                  className="max-w-full max-h-[420px] object-contain"
-                />
-              ) : (
-                <div className="text-slate-400 text-sm">No image</div>
-              )}
-            </div>
+        {/* SORT */}
+        <div className="mb-3 text-xs flex gap-2">
+          {[
+            {id:"relevance", label:"Relevance"},
+            {id:"top-rated", label:"Top Rated"},
+            {id:"low-price", label:"Lowest Price"}
+          ].map(s=>(
+            <button
+              key={s.id}
+              onClick={()=>setSortMode(s.id)}
+              className={`px-3 py-1 rounded-full border ${sortMode===s.id ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-white border-slate-200 text-slate-600"}`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
 
-            {/* PRODUCT INFO */}
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">
-                {product.title}
-              </h1>
-
-              {/* Rating */}
-              {product.rating_count > 0 && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-medium">
-                    {product.rating.toFixed(1)} ★
-                  </span>
-                  <span className="text-xs text-slate-600">
-                    ({product.rating_count} reviews)
-                  </span>
-                </div>
-              )}
-
-              {/* Price */}
-              <div className="mt-4">
-                <div className="text-2xl font-semibold text-emerald-600">
-                  ₹{product.price.toFixed(2)}
-                </div>
-
-                {product.mrp > product.price && (
-                  <div className="flex items-center gap-2 mt-1 text-sm">
-                    <span className="text-slate-400 line-through">
-                      ₹{product.mrp.toFixed(2)}
-                    </span>
-                    <span className="text-emerald-600 font-medium">
-                      {Math.round(
-                        ((product.mrp - product.price) / product.mrp) * 100
-                      )}
-                      % off
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Stock */}
-              <p className="text-sm text-slate-600 mt-1">
-                Stock: {product.stock ?? "N/A"}
-              </p>
-
-              {/* Quantity Selector */}
-              <div className="mt-4 flex items-center gap-3">
-                <button
-                  className="px-3 py-1 border rounded-md"
-                  onClick={() => qty > 1 && setQty(qty - 1)}
-                >
-                  –
-                </button>
-                <div className="px-4 py-1 bg-white border rounded-md">
-                  {qty}
-                </div>
-                <button
-                  className="px-3 py-1 border rounded-md"
-                  onClick={() => setQty(qty + 1)}
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Add to Cart */}
-              <button
-                className="mt-5 w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-semibold shadow"
-                onClick={handleAddToCart}
-              >
-                Add to Cart
-              </button>
-
-              {/* Description */}
-              <div className="mt-8">
-                <h3 className="font-medium text-slate-900">Product Details</h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  {product.description || "No description available."}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Similar Products */}
-          {similarProducts.length > 0 && (
-            <section className="mt-12">
-              <h2 className="text-lg font-semibold text-slate-900 mb-3">
-                Similar Products
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                {similarProducts.map((p) => (
-                  <ProductCard key={p.id} product={p} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Reviews */}
-          <section className="mt-12 pb-12">
-            <h2 className="text-lg font-semibold text-slate-900 mb-3">
-              Customer Reviews
-            </h2>
-
-            {!reviews.length && (
-              <p className="text-sm text-slate-500">No reviews yet.</p>
-            )}
-
-            {reviews.map((r) => (
-              <div key={r.id} className="border-b py-3">
-                <div className="text-sm font-semibold text-yellow-500">
-                  ★ {r.rating}
-                </div>
-                <p className="text-sm text-slate-600">{r.comment}</p>
-              </div>
-            ))}
-          </section>
-        </main>
-      </div>
+        {/* LIST */}
+        {sortedProducts.map(p => (
+          <ProductRow key={p.id} product={p} />
+        ))}
+      </main>
     </>
-  );
+  )
 }
 
+// ──────────────────────────
+// Server props
+// ──────────────────────────
 export async function getServerSideProps(ctx) {
-  const id = ctx.params.id;
+  const { q="", category="" } = ctx.query
 
-  const query = `
-    id,title,price,mrp,rating,rating_count,description,
-    category_id,
+  let query = supabase.from("products").select(`
+    id,title,description,price,mrp,rating,rating_count,category_id,
     product_variants(price,stock),
     product_images(storage_path)
-  `;
+  `)
 
-  const { data: product } = await supabase
-    .from("products")
-    .select(query)
-    .eq("id", id)
-    .single();
+  if (q) query = query.ilike("title", `%${q}%`)
+  if (category) query = query.eq("category_id", category)
 
-  if (!product) {
-    return { notFound: true };
-  }
+  const { data } = await query.order("created_at", { ascending: false })
 
-  const firstImage = product.product_images?.[0] ?? null;
-  const firstVariant = product.product_variants?.[0] ?? null;
-
-  const normalizedProduct = {
-    ...product,
-    price: firstVariant?.price ?? product.price,
-    stock: firstVariant?.stock ?? null,
-    imagePath: firstImage?.storage_path ?? null,
-  };
-
-  const { data: similar } = await supabase
-    .from("products")
-    .select(query)
-    .eq("category_id", product.category_id)
-    .neq("id", id)
-    .limit(10);
-
-  const similarProducts = (similar ?? []).map((p) => ({
+  const products = (data ?? []).map(p => ({
     ...p,
     price: p.product_variants?.[0]?.price ?? p.price,
+    stock: p.product_variants?.[0]?.stock ?? null,
     imagePath: p.product_images?.[0]?.storage_path ?? null,
-  }));
-
-  const { data: reviews } = await supabase
-    .from("reviews")
-    .select("id,rating,comment")
-    .eq("product_id", id)
-    .order("id", { ascending: false });
+    imageUrl: makePublicUrl(p.product_images?.[0]?.storage_path),
+  }))
 
   return {
     props: {
-      product: normalizedProduct,
-      similarProducts,
-      reviews: reviews ?? [],
-    },
-  };
+      products,
+      initialQ: q,
+      categoryName: null
+    }
+  }
 }
