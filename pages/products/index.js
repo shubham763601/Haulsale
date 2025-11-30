@@ -1,5 +1,5 @@
 // pages/products/index.js
-import React, { useState, useContext } from 'react'
+import React, { useState, useContext, useMemo, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
@@ -12,11 +12,14 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 function makePublicUrl(path) {
   if (!path || !SUPABASE_URL) return null
   if (path.startsWith('http://') || path.startsWith('https://')) return path
-  // storage_path is like "product-images/xyz.jpg"
+  // storage_path like "product-images/atta-50kg.jpg"
   return `${SUPABASE_URL}/storage/v1/object/public/public-assets/${path}`
 }
 
-function ProductRow({ product }) {
+// ──────────────────────────────────────
+// Row component (1 product per row)
+// ──────────────────────────────────────
+function ProductRow({ product, onAdded }) {
   const { addItem } = useContext(CartContext)
   const [qty, setQty] = useState(1)
 
@@ -32,9 +35,10 @@ function ProductRow({ product }) {
 
   function handleAddToCart() {
     if (!addItem) return
-    addItem({
+
+    const cartItem = {
       product_id: product.id,
-      variant_id: null, // later you can wire actual variant
+      variant_id: null, // later: real variant id
       title: product.title,
       price,
       mrp: mrp || null,
@@ -42,9 +46,10 @@ function ProductRow({ product }) {
       qty,
       seller_id: product.seller_id || null,
       stock: product.stock ?? null,
-    })
-    // we'll replace this with drawer/ toast later
-    alert('Added to cart')
+    }
+
+    addItem(cartItem)
+    if (onAdded) onAdded(cartItem)
   }
 
   return (
@@ -161,9 +166,18 @@ function ProductRow({ product }) {
   )
 }
 
-export default function ProductsPage({ products, initialQ }) {
+// ──────────────────────────────────────
+// Main Products Page
+// ──────────────────────────────────────
+export default function ProductsPage({ products, initialQ, categoryName }) {
   const router = useRouter()
   const [search, setSearch] = useState(initialQ || '')
+
+  const [sortMode, setSortMode] = useState('relevance') // relevance | top-rated | low-price | newest
+
+  // mini-cart drawer
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerItem, setDrawerItem] = useState(null)
 
   function handleSearchSubmit(e) {
     e.preventDefault()
@@ -173,20 +187,59 @@ export default function ProductsPage({ products, initialQ }) {
     router.push(`/products?${params.toString()}`)
   }
 
+  function handleAddedToCart(item) {
+    setDrawerItem(item)
+    setDrawerOpen(true)
+  }
+
+  // auto-close drawer after 4s
+  useEffect(() => {
+    if (!drawerOpen) return
+    const id = setTimeout(() => setDrawerOpen(false), 4000)
+    return () => clearTimeout(id)
+  }, [drawerOpen])
+
+  const sortedProducts = useMemo(() => {
+    const arr = [...products]
+
+    if (sortMode === 'top-rated') {
+      arr.sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    } else if (sortMode === 'low-price') {
+      arr.sort((a, b) => (a.price || 0) - (b.price || 0))
+    } else if (sortMode === 'newest') {
+      // server already sent newest first by created_at
+      // so for "newest" we just return as-is
+      return arr
+    }
+    // "relevance" = original order as sent by server
+    return arr
+  }, [products, sortMode])
+
+  const breadcrumbLabel = categoryName || 'Products'
+
   return (
     <>
       <Head>
-        <title>Products – Haullcell</title>
+        <title>{breadcrumbLabel} – Haullcell</title>
       </Head>
 
       <div className="flex min-h-screen flex-col bg-slate-50">
         <NavBar />
 
         <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 sm:px-4 lg:px-6 py-4">
-          {/* header + search (extra search just for this page) */}
+          {/* Breadcrumbs */}
+          <nav className="mb-2 text-[11px] text-slate-500">
+            <Link href="/">
+              <a className="hover:text-indigo-600">Home</a>
+            </Link>
+            <span className="mx-1">›</span>
+            <span className="font-medium text-slate-700">{breadcrumbLabel}</span>
+          </nav>
+
+          {/* header + search + sorting */}
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-lg font-semibold text-slate-900">
-              All products
+              {categoryName ? categoryName : 'All products'}
             </h1>
 
             <form
@@ -209,23 +262,125 @@ export default function ProductsPage({ products, initialQ }) {
             </form>
           </div>
 
-          {products.length === 0 ? (
+          {/* Sorting controls */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[11px] text-slate-500 mr-1">Sort by:</span>
+            {[
+              { id: 'relevance', label: 'Relevance' },
+              { id: 'top-rated', label: 'Top Rated' },
+              { id: 'low-price', label: 'Lowest Price' },
+              { id: 'newest', label: 'Newest' },
+            ].map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setSortMode(opt.id)}
+                className={`rounded-full px-3 py-1 border text-xs ${
+                  sortMode === opt.id
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {sortedProducts.length === 0 ? (
             <p className="text-sm text-slate-500">
               No products found. Try a different search or category.
             </p>
           ) : (
             <div>
-              {products.map(p => (
-                <ProductRow key={p.id} product={p} />
+              {sortedProducts.map(p => (
+                <ProductRow
+                  key={p.id}
+                  product={p}
+                  onAdded={handleAddedToCart}
+                />
               ))}
             </div>
           )}
         </main>
+
+        {/* Mini-cart drawer */}
+        {drawerItem && (
+          <>
+            {/* overlay */}
+            <div
+              className={`fixed inset-0 z-40 bg-black/20 transition-opacity ${
+                drawerOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}
+              onClick={() => setDrawerOpen(false)}
+            />
+            {/* drawer panel */}
+            <div
+              className={`fixed inset-y-0 right-0 z-50 w-full max-w-sm border-l border-slate-200 bg-white shadow-xl transform transition-transform duration-200 ${
+                drawerOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Added to cart
+                </h2>
+                <button
+                  onClick={() => setDrawerOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="px-4 py-4 flex gap-3 border-b border-slate-100">
+                <div className="h-16 w-16 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden">
+                  {drawerItem.imageUrl ? (
+                    <img
+                      src={drawerItem.imageUrl}
+                      alt={drawerItem.title}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-slate-200" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-900 line-clamp-2">
+                    {drawerItem.title}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Qty {drawerItem.qty} · ₹{drawerItem.price.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-4 py-4 flex flex-col gap-2 text-sm">
+                <button
+                  onClick={() => {
+                    setDrawerOpen(false)
+                    window.location.href = '/cart'
+                  }}
+                  className="w-full rounded-full bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                >
+                  Go to cart
+                </button>
+                <button
+                  onClick={() => setDrawerOpen(false)}
+                  className="w-full rounded-full border border-slate-200 py-2 text-xs font-medium text-slate-700 hover:border-slate-300"
+                >
+                  Continue shopping
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   )
 }
 
+// ──────────────────────────────────────
+// Server-side data
+// ──────────────────────────────────────
 export async function getServerSideProps(ctx) {
   const { q = '', category = '' } = ctx.query
 
@@ -285,10 +440,25 @@ export async function getServerSideProps(ctx) {
       }
     }) ?? []
 
+  // simple category name for breadcrumb (if filter applied)
+  let categoryName = null
+  if (category) {
+    const { data: catRow, error: catErr } = await supabase
+      .from('categories')
+      .select('name')
+      .eq('id', category)
+      .maybeSingle()
+
+    if (!catErr && catRow) {
+      categoryName = catRow.name
+    }
+  }
+
   return {
     props: {
       products,
       initialQ: q || '',
+      categoryName,
     },
   }
 }
