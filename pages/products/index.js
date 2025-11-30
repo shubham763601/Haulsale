@@ -1,5 +1,5 @@
 // pages/products/index.js
-import React, { useState, useContext, useMemo, useEffect } from 'react'
+import React, { useState, useContext, useMemo } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
@@ -19,9 +19,10 @@ function makePublicUrl(path) {
 // ──────────────────────────────────────
 // Row component (1 product per row)
 // ──────────────────────────────────────
-function ProductRow({ product, onAdded }) {
+function ProductRow({ product }) {
   const { addItem } = useContext(CartContext)
   const [qty, setQty] = useState(1)
+  const [isAdding, setIsAdding] = useState(false)
 
   const imageUrl = product.imageUrl || makePublicUrl(product.imagePath)
 
@@ -34,7 +35,7 @@ function ProductRow({ product, onAdded }) {
   const ratingCount = product.rating_count || 0
 
   function handleAddToCart() {
-    if (!addItem) return
+    if (!addItem || isAdding) return
 
     const cartItem = {
       product_id: product.id,
@@ -48,8 +49,12 @@ function ProductRow({ product, onAdded }) {
       stock: product.stock ?? null,
     }
 
+    // update global cart (navbar badge + /cart page)
     addItem(cartItem)
-    if (onAdded) onAdded(cartItem)
+
+    // small animation / feedback
+    setIsAdding(true)
+    setTimeout(() => setIsAdding(false), 500)
   }
 
   return (
@@ -156,9 +161,15 @@ function ProductRow({ product, onAdded }) {
           <button
             type="button"
             onClick={handleAddToCart}
-            className="rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
+            disabled={isAdding}
+            className={
+              'rounded-full px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all ' +
+              (isAdding
+                ? 'bg-emerald-600 scale-95'
+                : 'bg-indigo-600 hover:bg-indigo-500')
+            }
           >
-            Add to cart
+            {isAdding ? 'Added ✓' : 'Add to cart'}
           </button>
         </div>
       </div>
@@ -175,10 +186,6 @@ export default function ProductsPage({ products, initialQ, categoryName }) {
 
   const [sortMode, setSortMode] = useState('relevance') // relevance | top-rated | low-price | newest
 
-  // mini-cart drawer
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerItem, setDrawerItem] = useState(null)
-
   function handleSearchSubmit(e) {
     e.preventDefault()
     const params = new URLSearchParams(router.query)
@@ -186,18 +193,6 @@ export default function ProductsPage({ products, initialQ, categoryName }) {
     else params.delete('q')
     router.push(`/products?${params.toString()}`)
   }
-
-  function handleAddedToCart(item) {
-    setDrawerItem(item)
-    setDrawerOpen(true)
-  }
-
-  // auto-close drawer after 4s
-  useEffect(() => {
-    if (!drawerOpen) return
-    const id = setTimeout(() => setDrawerOpen(false), 4000)
-    return () => clearTimeout(id)
-  }, [drawerOpen])
 
   const sortedProducts = useMemo(() => {
     const arr = [...products]
@@ -264,7 +259,7 @@ export default function ProductsPage({ products, initialQ, categoryName }) {
 
           {/* Sorting controls */}
           <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[11px] text-slate-500 mr-1">Sort by:</span>
+            <span className="mr-1 text-[11px] text-slate-500">Sort by:</span>
             {[
               { id: 'relevance', label: 'Relevance' },
               { id: 'top-rated', label: 'Top Rated' },
@@ -275,7 +270,7 @@ export default function ProductsPage({ products, initialQ, categoryName }) {
                 key={opt.id}
                 type="button"
                 onClick={() => setSortMode(opt.id)}
-                className={`rounded-full px-3 py-1 border text-xs ${
+                className={`rounded-full border px-3 py-1 text-xs ${
                   sortMode === opt.id
                     ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300'
@@ -293,86 +288,11 @@ export default function ProductsPage({ products, initialQ, categoryName }) {
           ) : (
             <div>
               {sortedProducts.map(p => (
-                <ProductRow
-                  key={p.id}
-                  product={p}
-                  onAdded={handleAddedToCart}
-                />
+                <ProductRow key={p.id} product={p} />
               ))}
             </div>
           )}
         </main>
-
-        {/* Mini-cart drawer */}
-        {drawerItem && (
-          <>
-            {/* overlay */}
-            <div
-              className={`fixed inset-0 z-40 bg-black/20 transition-opacity ${
-                drawerOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
-              }`}
-              onClick={() => setDrawerOpen(false)}
-            />
-            {/* drawer panel */}
-            <div
-              className={`fixed inset-y-0 right-0 z-50 w-full max-w-sm border-l border-slate-200 bg-white shadow-xl transform transition-transform duration-200 ${
-                drawerOpen ? 'translate-x-0' : 'translate-x-full'
-              }`}
-            >
-              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Added to cart
-                </h2>
-                <button
-                  onClick={() => setDrawerOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="px-4 py-4 flex gap-3 border-b border-slate-100">
-                <div className="h-16 w-16 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden">
-                  {drawerItem.imageUrl ? (
-                    <img
-                      src={drawerItem.imageUrl}
-                      alt={drawerItem.title}
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-slate-200" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 line-clamp-2">
-                    {drawerItem.title}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Qty {drawerItem.qty} · ₹{drawerItem.price.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="px-4 py-4 flex flex-col gap-2 text-sm">
-                <button
-                  onClick={() => {
-                    setDrawerOpen(false)
-                    window.location.href = '/cart'
-                  }}
-                  className="w-full rounded-full bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-                >
-                  Go to cart
-                </button>
-                <button
-                  onClick={() => setDrawerOpen(false)}
-                  className="w-full rounded-full border border-slate-200 py-2 text-xs font-medium text-slate-700 hover:border-slate-300"
-                >
-                  Continue shopping
-                </button>
-              </div>
-            </div>
-          </>
-        )}
       </div>
     </>
   )
