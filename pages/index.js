@@ -52,7 +52,7 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
               </div>
             </div>
 
-            {/* Category strip (old style you liked) */}
+            {/* Category strip (the old style you liked) */}
             <div className="mt-6">
               <CategoryStrip categories={categories} />
             </div>
@@ -92,32 +92,6 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
 }
 
 export async function getServerSideProps() {
-  // ---- helper: build public URL from storage_path (CDN-style) ----
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || ''
-
-  function makePublicUrl(storagePath) {
-    if (!storagePath) return null
-    // already a full URL? just return
-    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
-      return storagePath
-    }
-    if (!baseUrl) return null
-
-    // storagePath could be:
-    //  - 'product-images/atta-50kg.jpg'
-    //  - 'public-assets/product-images/atta-50kg.jpg'
-    //  - 'some/other/folder/file.png'
-
-    if (storagePath.startsWith('public-assets/')) {
-      // already includes bucket name
-      return `${baseUrl}/storage/v1/object/public/${storagePath}`
-    }
-
-    // normal case: we stored just 'product-images/atta-50kg.jpg'
-    return `${baseUrl}/storage/v1/object/public/public-assets/${storagePath}`
-  }
-
   // ---- categories ----
   const { data: categoriesData } = await supabase
     .from('categories')
@@ -130,6 +104,9 @@ export async function getServerSideProps() {
     id,
     title,
     price,
+    mrp,
+    rating,
+    rating_count,
     description,
     category_id,
     product_variants ( price, stock ),
@@ -148,7 +125,6 @@ export async function getServerSideProps() {
     .order('price', { ascending: true })
     .limit(15)
 
-  // normalize products for UI
   function normalizeProducts(list) {
     if (!list) return []
     return list.map((p) => {
@@ -166,9 +142,10 @@ export async function getServerSideProps() {
         category_id: p.category_id ?? null,
         price: firstVariant?.price ?? p.price ?? null,
         stock: firstVariant?.stock ?? null,
-        imageUrl: firstImage ? makePublicUrl(firstImage.storage_path) : null,
-        // keep raw path just in case
         imagePath: firstImage?.storage_path ?? null,
+        mrp: p.mrp ?? null,
+        rating: p.rating ?? null,
+        rating_count: p.rating_count ?? null,
       }
     })
   }
