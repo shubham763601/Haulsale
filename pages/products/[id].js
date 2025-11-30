@@ -1,333 +1,216 @@
 // pages/products/[id].js
-import React, { useContext, useState } from 'react'
-import Head from 'next/head'
-import { useRouter } from 'next/router'
-import { supabase } from '../../lib/supabaseClient'
-import NavBar from '../../components/NavBar'
-import UserContext from '../../lib/userContext'
+import { useState } from "react";
+import Head from "next/head";
+import { supabase } from "../../lib/supabaseClient";
+import NavBar from "../../components/NavBar";
+import ProductCard from "../../components/ProductCard";
 
-function StarIcon(props) {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" {...props}>
-      <path
-        d="M10 1.5 12.6 7l5.1.4-3.9 3.3 1.2 5-4.9-2.8-4.9 2.8 1.2-5L2.3 7.4 7.4 7z"
-        fill="currentColor"
-      />
-    </svg>
-  )
+function makePublicUrl(path) {
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!path || !baseUrl) return null;
+  if (path.startsWith("http")) return path;
+  return `${baseUrl}/storage/v1/object/public/public-assets/${path}`;
 }
 
-export default function ProductDetailPage({ product, reviews: initialReviews }) {
-  const router = useRouter()
-  const { user } = useContext(UserContext)
+export default function ProductPage({ product, similarProducts, reviews }) {
+  const [qty, setQty] = useState(1);
 
-  const [reviews, setReviews] = useState(initialReviews || [])
-  const [rating, setRating] = useState(5)
-  const [comment, setComment] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const imageUrl =
-    baseUrl && product.imagePath
-      ? `${baseUrl}/storage/v1/object/public/public-assets/${product.imagePath}`
-      : null
-
-  async function handleReviewSubmit(e) {
-    e.preventDefault()
-    setError(null)
-
-    if (!user) {
-      setError('Please sign in to leave a review')
-      return
-    }
-
-    try {
-      setSaving(true)
-      const { error: insertErr, data } = await supabase
-        .from('reviews')
-        .insert({
-          product_id: product.id,
-          buyer_id: user.id,
-          rating,
-          comment: comment || null,
-        })
-        .select()
-        .single()
-
-      if (insertErr) {
-        console.error(insertErr)
-        setError(insertErr.message || 'Failed to save review')
-      } else {
-        // optimistic: just push to local list
-        setReviews((prev) => [
-          {
-            ...data,
-            buyer_email: user.email,
-          },
-          ...prev,
-        ])
-        setComment('')
-        setRating(5)
-      }
-    } catch (err) {
-      console.error(err)
-      setError('Unexpected error saving review')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const price = Number(product.price || 0)
-  const mrp = Number(product.mrp || 0)
-  const hasDiscount = mrp && mrp > price
-  const offPct = hasDiscount ? Math.round(((mrp - price) / mrp) * 100) : null
+  const imageUrl = product.imageUrl || makePublicUrl(product.imagePath);
 
   return (
     <>
       <Head>
-        <title>{product.title} — Haullcell</title>
+        <title>{product.title} – Haullcell</title>
       </Head>
+
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <NavBar />
-        <main className="flex-1 mx-auto max-w-5xl px-3 sm:px-4 lg:px-6 py-4">
-          {/* Top section */}
-          <div className="grid gap-6 md:grid-cols-[1.2fr,2fr]">
-            {/* Image */}
-            <div className="rounded-xl bg-white border border-slate-200 p-4 flex items-center justify-center">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={product.title}
-                  className="max-h-[360px] object-contain"
-                />
-              ) : (
-                <div className="w-full h-64 flex flex-col items-center justify-center text-slate-300 text-sm">
-                  <div className="w-20 h-20 rounded-full bg-slate-200 mb-3" />
-                  No image
-                </div>
-              )}
+
+        <main className="flex-1 mx-auto max-w-6xl px-4 py-6">
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* BIG IMAGE */}
+            <div className="rounded-2xl bg-white border shadow-sm p-4 flex items-center justify-center">
+              <img
+                src={imageUrl}
+                alt={product.title}
+                className="max-w-full max-h-[420px] object-contain"
+              />
             </div>
 
-            {/* Info */}
-            <div className="space-y-3">
-              <h1 className="text-xl font-semibold text-slate-900">
+            {/* PRODUCT INFO */}
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">
                 {product.title}
               </h1>
 
               {/* Rating */}
               {product.rating_count > 0 && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-emerald-600 text-white text-xs font-medium">
-                    <StarIcon className="w-3 h-3" />
-                    {product.rating.toFixed(1)}
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-emerald-600 text-white text-xs font-medium">
+                    {product.rating.toFixed(1)} ★
                   </span>
-                  <span className="text-xs text-slate-600">
-                    {product.rating_count} ratings
+                  <span className="text-xs text-slate-500">
+                    ({product.rating_count} reviews)
                   </span>
                 </div>
               )}
 
-              {/* Price block */}
-              <div className="space-y-1">
-                <div className="text-2xl font-semibold text-slate-900">
-                  ₹{price.toFixed(2)}
+              {/* Pricing */}
+              <div className="mt-3">
+                <div className="text-2xl font-semibold text-emerald-600">
+                  ₹{product.price.toFixed(2)}
                 </div>
-                {hasDiscount && (
-                  <div className="flex items-center gap-2 text-sm">
+
+                {product.mrp > product.price && (
+                  <div className="flex items-center gap-2 text-sm mt-1">
                     <span className="text-slate-400 line-through">
-                      ₹{mrp.toFixed(2)}
+                      ₹{product.mrp.toFixed(2)}
                     </span>
-                    <span className="text-emerald-600 font-semibold">
-                      {offPct}% off
+                    <span className="text-emerald-600 font-medium">
+                      {Math.round(((product.mrp - product.price) / product.mrp) * 100)}% off
                     </span>
-                  </div>
-                )}
-                {typeof product.stock === 'number' && (
-                  <div className="text-xs text-slate-500">
-                    Stock: {product.stock}
                   </div>
                 )}
               </div>
 
-              {product.description && (
-                <p className="text-sm text-slate-700 whitespace-pre-line">
-                  {product.description}
-                </p>
-              )}
+              {/* Stock */}
+              <div className="mt-1 text-sm text-slate-600">
+                Stock: {product.stock ?? "N/A"}
+              </div>
 
+              {/* Qty selector */}
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  className="px-3 py-1 border rounded-md bg-white"
+                  onClick={() => qty > 1 && setQty(qty - 1)}
+                >
+                  –
+                </button>
+                <div className="px-4 py-1 bg-white border rounded-md">
+                  {qty}
+                </div>
+                <button
+                  className="px-3 py-1 border rounded-md bg-white"
+                  onClick={() => setQty(qty + 1)}
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Add to cart */}
               <button
-                className="mt-3 inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-                onClick={() => router.push(`/checkout?product=${product.id}`)}
+                className="mt-4 w-full rounded-lg bg-indigo-600 text-white py-3 font-semibold shadow hover:bg-indigo-500"
               >
-                Add to cart
+                Add to Cart
               </button>
+
+              {/* Description */}
+              <div className="mt-6">
+                <h3 className="font-medium text-slate-900">Description</h3>
+                <p className="text-sm text-slate-600 mt-1">
+                  {product.description || "No description available."}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Reviews section */}
-          <section className="mt-8 grid gap-6 md:grid-cols-[1.3fr,1.7fr]">
-            {/* Review form */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-2">
-                Rate this product
+          {/* Similar products */}
+          {similarProducts.length > 0 && (
+            <section className="mt-10">
+              <h2 className="text-lg font-semibold text-slate-900 mb-3">
+                Similar items in this category
               </h2>
-              {!user && (
-                <p className="text-xs text-slate-500 mb-2">
-                  Please sign in to submit a review.
-                </p>
-              )}
 
-              {error && (
-                <div className="mb-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleReviewSubmit} className="space-y-3">
-                {/* Star selector */}
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setRating(star)}
-                      className="p-0.5"
-                    >
-                      <StarIcon
-                        className={`w-6 h-6 ${
-                          star <= rating
-                            ? 'text-amber-400'
-                            : 'text-slate-300'
-                        }`}
-                      />
-                    </button>
-                  ))}
-                  <span className="ml-2 text-xs text-slate-600">
-                    {rating} / 5
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-600">
-                    Comment (optional)
-                  </label>
-                  <textarea
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm min-h-[80px]"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Share your experience with this product..."
-                    disabled={!user}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={!user || saving}
-                  className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
-                >
-                  {saving ? 'Submitting…' : 'Submit review'}
-                </button>
-              </form>
-            </div>
-
-            {/* Reviews list */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-3">
-                Customer reviews
-              </h2>
-              {reviews.length === 0 && (
-                <p className="text-xs text-slate-500">
-                  No reviews yet. Be the first to review this product.
-                </p>
-              )}
-              <ul className="space-y-3">
-                {reviews.map((r) => (
-                  <li
-                    key={r.id}
-                    className="border-b last:border-0 border-slate-100 pb-3 last:pb-0"
-                  >
-                    <div className="flex items-center gap-2 text-xs mb-1">
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-emerald-600 text-white text-[11px] font-medium">
-                        <StarIcon className="w-3 h-3" />
-                        {r.rating}
-                      </span>
-                      <span className="text-slate-500">
-                        {r.buyer_email || 'Buyer'}
-                      </span>
-                    </div>
-                    {r.comment && (
-                      <p className="text-xs text-slate-700 whitespace-pre-line">
-                        {r.comment}
-                      </p>
-                    )}
-                  </li>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {similarProducts.map((p) => (
+                  <ProductCard key={p.id} product={p} />
                 ))}
-              </ul>
-            </div>
+              </div>
+            </section>
+          )}
+
+          {/* Reviews */}
+          <section className="mt-10 pb-10">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">
+              Reviews
+            </h2>
+
+            {reviews.length === 0 && (
+              <p className="text-sm text-slate-500">No reviews yet.</p>
+            )}
+
+            {reviews.map((r) => (
+              <div key={r.id} className="border-b py-3">
+                <div className="text-sm font-semibold text-slate-800">
+                  ★ {r.rating}
+                </div>
+                <p className="text-sm text-slate-600">{r.comment}</p>
+              </div>
+            ))}
           </section>
         </main>
       </div>
     </>
-  )
+  );
 }
 
 export async function getServerSideProps(ctx) {
-  const id = Number(ctx.params.id)
+  const id = ctx.params.id;
 
-  const { data: p, error } = await supabase
-    .from('products')
-    .select(
-      `
-      id,
-      title,
-      description,
-      price,
-      mrp,
-      rating,
-      rating_count,
-      created_at,
-      product_variants ( price, stock ),
-      product_images ( storage_path )
-    `
-    )
-    .eq('id', id)
-    .maybeSingle()
+  const productQuery = `
+    id, title, price, mrp, rating, rating_count, description,
+    category_id,
+    product_variants(price, stock),
+    product_images(storage_path)
+  `;
 
-  if (error || !p) {
-    console.error('product detail error', error)
-    return { notFound: true }
-  }
+  const { data: product } = await supabase
+    .from("products")
+    .select(productQuery)
+    .eq("id", id)
+    .single();
 
-  const product = {
-    id: p.id,
-    title: p.title,
-    description: p.description,
-    price:
-      p.product_variants?.[0]?.price ??
-      p.price ??
-      null,
-    mrp: p.mrp ?? null,
-    rating: p.rating ?? 0,
-    rating_count: p.rating_count ?? 0,
-    stock: p.product_variants?.[0]?.stock ?? null,
-    imagePath: p.product_images?.[0]?.storage_path ?? null,
-  }
+  const image = Array.isArray(product.product_images)
+    ? product.product_images[0]
+    : null;
+  const variant = Array.isArray(product.product_variants)
+    ? product.product_variants[0]
+    : null;
 
-  const { data: reviews, error: revErr } = await supabase
-    .from('reviews')
-    .select('id, product_id, buyer_id, rating, comment, created_at')
-    .eq('product_id', id)
-    .order('created_at', { ascending: false })
+  const normalizedProduct = {
+    ...product,
+    price: variant?.price ?? product.price ?? 0,
+    stock: variant?.stock ?? null,
+    imagePath: image?.storage_path || null,
+    imageUrl: makePublicUrl(image?.storage_path),
+  };
 
-  if (revErr) {
-    console.error('reviews load error', revErr)
-  }
+  // Similar products
+  const { data: sim } = await supabase
+    .from("products")
+    .select(productQuery)
+    .eq("category_id", product.category_id)
+    .neq("id", id)
+    .limit(10);
+
+  const similarProducts = sim.map((p) => ({
+    ...p,
+    price: p.product_variants?.[0]?.price ?? p.price,
+    imagePath: p.product_images?.[0]?.storage_path,
+  }));
+
+  // Reviews
+  const { data: reviews } = await supabase
+    .from("reviews")
+    .select("id, rating, comment")
+    .eq("product_id", id)
+    .order("id", { ascending: false });
 
   return {
     props: {
-      product,
-      reviews: reviews || [],
+      product: normalizedProduct,
+      similarProducts,
+      reviews: reviews ?? [],
     },
-  }
+  };
 }
