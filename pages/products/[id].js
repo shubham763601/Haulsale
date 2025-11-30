@@ -13,9 +13,28 @@ function makePublicUrl(path) {
 }
 
 export default function ProductPage({ product, similarProducts, reviews }) {
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(1)
+  const { addItem } = useCart()
 
-  const imageUrl = product.imageUrl || makePublicUrl(product.imagePath);
+  const imageUrl = product.imageUrl || makePublicUrl(product.imagePath)
+
+  function handleAddToCart() {
+    addItem({
+      product_id: product.id,
+      variant_id: null, // later you can pass real variant_id
+      title: product.title,
+      price: product.price,
+      mrp: product.mrp,
+      imageUrl,
+      qty,
+      seller_id: product.seller_id || null,
+      stock: product.stock ?? null,
+    })
+    alert('Added to cart') // swap for a nicer toast later
+  }
+
+  // ...rest stays same
+
 
   return (
     <>
@@ -100,10 +119,11 @@ export default function ProductPage({ product, similarProducts, reviews }) {
               {/* Add to cart */}
               <button
                 className="mt-4 w-full rounded-lg bg-indigo-600 text-white py-3 font-semibold shadow hover:bg-indigo-500"
+                onClick={handleAddToCart}
               >
                 Add to Cart
               </button>
-
+          
               {/* Description */}
               <div className="mt-6">
                 <h3 className="font-medium text-slate-900">Description</h3>

@@ -1,80 +1,156 @@
 // pages/cart.js
-import React, { useContext, useState } from 'react'
+import Head from 'next/head'
 import NavBar from '../components/NavBar'
-import { CartContext } from '../lib/cartContext'
-import { useRouter } from 'next/router'
-import Link from 'next/link'
+import { useCart } from '../context/CartContext'
 
 export default function CartPage() {
-  const { items, updateQty, removeItem, total, clear } = useContext(CartContext)
-  const router = useRouter()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
+  const { items, updateQty, removeItem, clearCart, subtotal } = useCart()
 
-  async function handleProceed() {
-    setError(null)
-    if (!items.length) return setError('Cart is empty')
-    router.push('/checkout')
-  }
+  const hasItems = items.length > 0
 
   return (
     <>
-      <NavBar />
-      <main className="min-h-screen p-8 bg-gray-900 text-white">
-        <section className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold mb-4">Your cart</h1>
+      <Head>
+        <title>Cart – Haullcell</title>
+      </Head>
 
-          {items.length === 0 ? (
-            <div className="bg-white/5 p-6 rounded">
-              <p>Your cart is empty.</p>
-              <Link href="/products"><a className="text-indigo-400 underline mt-3 inline-block">Browse products</a></Link>
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        <NavBar />
+
+        <main className="flex-1 mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-6">
+          <h1 className="text-xl font-semibold text-slate-900 mb-4">
+            Your cart
+          </h1>
+
+          {!hasItems && (
+            <div className="rounded-xl bg-white border border-slate-200 p-6 text-sm text-slate-600">
+              Your cart is empty. Browse products and add items to place an
+              order.
             </div>
-          ) : (
-            <>
-              <div className="space-y-4 mb-6">
-                {items.map(it => (
-                  <div key={it.variant_id} className="flex items-center justify-between p-4 bg-white/5 rounded">
-                    <div>
-                      <div className="font-semibold">{it.title}</div>
-                      <div className="text-sm text-gray-300">SKU: {it.sku}</div>
+          )}
+
+          {hasItems && (
+            <div className="grid lg:grid-cols-[2fr,1fr] gap-6">
+              {/* Items list */}
+              <div className="rounded-xl bg-white border border-slate-200 divide-y">
+                {items.map((item) => (
+                  <div
+                    key={`${item.product_id}-${item.variant_id || 'default'}`}
+                    className="flex gap-4 p-4"
+                  >
+                    <div className="h-20 w-20 flex-shrink-0 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.title}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-xs text-slate-400">
+                          No image
+                        </span>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="number"
-                        min="1"
-                        value={it.qty}
-                        onChange={e => updateQty(it.variant_id, Number(e.target.value))}
-                        className="w-20 px-2 py-1 rounded text-black"
-                      />
-                      <div className="font-medium">₹{(Number(it.price) * Number(it.qty)).toFixed(2)}</div>
-                      <button onClick={() => removeItem(it.variant_id)} className="px-3 py-1 rounded bg-red-600">Remove</button>
+                    <div className="flex-1">
+                      <div className="flex justify-between">
+                        <div>
+                          <h2 className="text-sm font-medium text-slate-900">
+                            {item.title}
+                          </h2>
+                          {item.stock != null && (
+                            <p className="text-xs text-slate-500">
+                              Stock: {item.stock}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          ₹{(item.price * item.qty).toFixed(2)}
+                        </div>
+                      </div>
+
+                      {/* Qty controls */}
+                      <div className="mt-2 flex items-center gap-3">
+                        <div className="inline-flex items-center border rounded-md bg-white">
+                          <button
+                            className="px-2 py-1 text-sm"
+                            onClick={() =>
+                              updateQty(
+                                item.product_id,
+                                item.variant_id,
+                                Math.max(1, item.qty - 1)
+                              )
+                            }
+                          >
+                            –
+                          </button>
+                          <div className="px-3 py-1 text-sm border-x">
+                            {item.qty}
+                          </div>
+                          <button
+                            className="px-2 py-1 text-sm"
+                            onClick={() =>
+                              updateQty(
+                                item.product_id,
+                                item.variant_id,
+                                item.qty + 1
+                              )
+                            }
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <button
+                          className="text-xs text-rose-500 hover:text-rose-600"
+                          onClick={() =>
+                            removeItem(item.product_id, item.variant_id)
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => clear()} className="px-4 py-2 rounded bg-gray-700">Clear cart</button>
-                  <Link href="/products"><a className="px-4 py-2 rounded border">Continue shopping</a></Link>
+              {/* Summary */}
+              <aside className="rounded-xl bg-white border border-slate-200 p-4 h-fit">
+                <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                  Price details
+                </h2>
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Subtotal</span>
+                  <span>₹{subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Shipping</span>
+                  <span className="text-emerald-600">Free</span>
+                </div>
+                <div className="border-t border-slate-200 mt-2 pt-3 flex justify-between font-semibold text-sm">
+                  <span>Total</span>
+                  <span>₹{subtotal.toFixed(2)}</span>
                 </div>
 
-                <div className="text-right">
-                  <div className="text-sm text-gray-300">Total</div>
-                  <div className="text-2xl font-bold mb-2">₹{total.toFixed(2)}</div>
-                  {error && <div className="text-red-400 mb-2">{error}</div>}
-                  <div className="flex gap-3 justify-end">
-                    <button onClick={handleProceed} disabled={busy} className="px-4 py-2 rounded bg-green-600">
-                      {busy ? 'Processing...' : 'Proceed to checkout'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
+                <button
+                  className="mt-4 w-full rounded-lg bg-emerald-600 text-white py-2.5 text-sm font-semibold hover:bg-emerald-500"
+                  onClick={() => alert('Checkout coming soon')}
+                >
+                  Place order
+                </button>
+
+                <button
+                  className="mt-2 w-full text-xs text-slate-500 hover:text-slate-700"
+                  onClick={clearCart}
+                >
+                  Clear cart
+                </button>
+              </aside>
+            </div>
           )}
-        </section>
-      </main>
+        </main>
+      </div>
     </>
   )
 }
