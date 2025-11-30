@@ -3,7 +3,7 @@ import '../styles/globals.css'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import UserContext from '../lib/userContext'
-import { CartProvider } from '../lib/cartContext'
+import { CartProvider } from '../context/CartContext'
 
 function MyApp({ Component, pageProps }) {
   const [user, setUser] = useState(null)
