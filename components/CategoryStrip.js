@@ -3,14 +3,19 @@ import React from 'react'
 import Link from 'next/link'
 
 export default function CategoryStrip({ categories }) {
-  if (!categories || categories.length === 0) {
-    return null
-  }
+  if (!categories || categories.length === 0) return null
 
   return (
-    <div className="rounded-2xl bg-white shadow-sm border border-slate-200 px-3 py-3 sm:px-4">
+    <section className="rounded-2xl bg-white border border-slate-200 shadow-sm px-3 py-3 sm:px-4 sm:py-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-slate-800">Browse categories</h2>
+        <div>
+          <h2 className="text-sm sm:text-base font-semibold text-slate-900">
+            Browse categories
+          </h2>
+          <p className="text-xs text-slate-500">
+            Shop by department from verified wholesalers
+          </p>
+        </div>
         <Link href="/categories">
           <a className="text-xs font-medium text-indigo-600 hover:text-indigo-500">
             View all
@@ -18,23 +23,36 @@ export default function CategoryStrip({ categories }) {
         </Link>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-1.5">
-        {categories.map((cat) => (
-          <Link key={cat.id} href={`/categories/${cat.id}`}>
-            <a className="flex-shrink-0 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-2 min-w-[96px] text-center shadow-xs">
-              <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
-                {String(cat.name || '?')
-                  .trim()
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
-              <div className="text-xs font-medium text-slate-800 truncate">
-                {cat.name}
-              </div>
-            </a>
-          </Link>
-        ))}
+      <div className="flex gap-4 overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5">
+        {categories.map((cat) => {
+          const initial = cat.name?.[0]?.toUpperCase() || '?'
+          const iconUrl = cat.iconUrl
+
+          return (
+            <Link key={cat.id} href={`/categories?selected=${cat.id}`}>
+              <a className="flex-shrink-0 w-20 sm:w-24 flex flex-col items-center group">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center overflow-hidden group-hover:bg-indigo-100 transition-colors">
+                  {iconUrl ? (
+                    <img
+                      src={iconUrl}
+                      alt={cat.name}
+                      className="w-8 h-8 sm:w-9 sm:h-9 object-contain"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="text-sm sm:text-base font-semibold text-indigo-600">
+                      {initial}
+                    </span>
+                  )}
+                </div>
+                <span className="mt-1 text-[11px] text-slate-700 text-center leading-tight line-clamp-2">
+                  {cat.name}
+                </span>
+              </a>
+            </Link>
+          )
+        })}
       </div>
-    </div>
+    </section>
   )
 }

@@ -18,11 +18,10 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
         <NavBar />
 
         <main className="flex-1">
-          {/* Top hero + category strip */}
+          {/* Hero + right side */}
           <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-4 lg:py-6">
             <div className="grid gap-4 lg:grid-cols-[2.5fr,1fr]">
               <HeroCarousel />
-              {/* Right side promo / CTA */}
               <div className="hidden lg:flex flex-col gap-3">
                 <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white p-4 shadow-sm">
                   <p className="text-xs uppercase tracking-wide opacity-80">
@@ -52,7 +51,7 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
               </div>
             </div>
 
-            {/* Category strip (the old style you liked) */}
+            {/* Category strip */}
             <div className="mt-6">
               <CategoryStrip categories={categories} />
             </div>
@@ -91,11 +90,29 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
   )
 }
 
+function makePublicUrl(storagePath) {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    ''
+  if (!storagePath || !baseUrl) return null
+
+  if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+    return storagePath
+  }
+
+  if (storagePath.startsWith('public-assets/')) {
+    return `${baseUrl}/storage/v1/object/public/${storagePath}`
+  }
+
+  return `${baseUrl}/storage/v1/object/public/public-assets/${storagePath}`
+}
+
 export async function getServerSideProps() {
   // ---- categories ----
   const { data: categoriesData } = await supabase
     .from('categories')
-    .select('id, name')
+    .select('id, name, icon_path')
     .order('id', { ascending: true })
     .limit(12)
 
@@ -150,9 +167,17 @@ export async function getServerSideProps() {
     })
   }
 
+  const categories =
+    (categoriesData || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      iconPath: c.icon_path || null,
+      iconUrl: c.icon_path ? makePublicUrl(c.icon_path) : null,
+    }))
+
   return {
     props: {
-      categories: categoriesData ?? [],
+      categories,
       featuredProducts: normalizeProducts(featured),
       dealProducts: normalizeProducts(deals),
     },
