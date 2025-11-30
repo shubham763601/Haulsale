@@ -1,73 +1,122 @@
 // pages/products/index.js
-import React, { useEffect, useState } from 'react'
+import React, { useMemo, useState } from 'react'
+import Head from 'next/head'
+import NavBar from '../../components/NavBar'
 import { supabase } from '../../lib/supabaseClient'
 import ProductCard from '../../components/ProductCard'
-import NavBar from '../../components/NavBar'
 
-export default function ProductsPage() {
-  const [products, setProducts] = useState([])
-  const [q, setQ] = useState('')
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const PAGE_SIZE = 12
+export default function ProductsPage({ products }) {
+  const [sortBy, setSortBy] = useState('top-rated')
 
-  useEffect(() => {
-    fetchProducts()
-  }, [q, page])
-
-  async function fetchProducts() {
-    setLoading(true)
-    try {
-      // Basic search by title, join variants
-      let query = supabase
-        .from('products')
-        .select('id, title, description, product_variants(id, price, sku, moq, stock)')
-        .order('created_at', { ascending: false })
-        .range((page-1)*PAGE_SIZE, page*PAGE_SIZE - 1)
-
-      if (q && q.trim().length) {
-        query = supabase
-          .from('products')
-          .select('id, title, description, product_variants(id, price, sku, moq, stock)')
-          .ilike('title', `%${q}%`)
-          .order('created_at', { ascending: false })
-          .range((page-1)*PAGE_SIZE, page*PAGE_SIZE - 1)
-      }
-
-      const { data, error } = await query
-      if (error) throw error
-      setProducts(data || [])
-    } catch (err) {
-      console.error('fetchProducts', err)
-    } finally {
-      setLoading(false)
+  const sorted = useMemo(() => {
+    const list = [...products]
+    switch (sortBy) {
+      case 'lowest-price':
+        return list.sort((a, b) => (a.price || 0) - (b.price || 0))
+      case 'best-selling':
+        // approximate: use rating_count as "popularity"
+        return list.sort(
+          (a, b) =>
+            (b.rating_count || b.ratingCount || 0) -
+            (a.rating_count || a.ratingCount || 0)
+        )
+      case 'newest':
+        return list.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+        )
+      case 'top-rated':
+      default:
+        return list.sort(
+          (a, b) => (b.rating || 0) - (a.rating || 0)
+        )
     }
-  }
+  }, [products, sortBy])
 
   return (
     <>
-      <NavBar />
-      <main className="p-6">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold mb-4">Products</h1>
-          <div className="mb-4 flex gap-3">
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search products" className="px-3 py-2 rounded border" />
-            <button onClick={() => { setPage(1); fetchProducts() }} className="px-3 py-2 rounded bg-indigo-600">Search</button>
-          </div>
-
-          {loading ? <div>Loading...</div> : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {products.map(p => <ProductCard key={p.id} product={p} />)}
+      <Head>
+        <title>All products — Haullcell</title>
+      </Head>
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        <NavBar />
+        <main className="flex-1 mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-lg font-semibold text-slate-900">
+              All products
+            </h1>
+            <div className="flex items-center gap-2 text-xs sm:text-sm">
+              <span className="text-slate-500">Sort by</span>
+              <select
+                className="border border-slate-200 rounded-md bg-white px-2 py-1 text-xs sm:text-sm"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="top-rated">Top Rated</option>
+                <option value="best-selling">Best Selling</option>
+                <option value="lowest-price">Lowest Price</option>
+                <option value="newest">Newest</option>
+              </select>
             </div>
-          )}
-
-          <div className="flex gap-2 justify-center my-6">
-            <button disabled={page===1} onClick={() => setPage(p => Math.max(1, p-1))} className="px-3 py-1 border rounded">Prev</button>
-            <span className="px-3 py-1">Page {page}</span>
-            <button onClick={() => setPage(p => p+1)} className="px-3 py-1 border rounded">Next</button>
           </div>
-        </div>
-      </main>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+            {sorted.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </main>
+      </div>
     </>
   )
+}
+
+export async function getServerSideProps() {
+  const { data, error } = await supabase
+    .from('products')
+    .select(
+      `
+      id,
+      title,
+      description,
+      price,
+      mrp,
+      rating,
+      rating_count,
+      created_at,
+      product_variants ( price, stock ),
+      product_images ( storage_path )
+    `
+    )
+    .limit(120)
+
+  if (error) {
+    console.error('products listing error', error)
+  }
+
+  function normalize(list) {
+    if (!list) return []
+    return list.map((p) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      price:
+        p.product_variants?.[0]?.price ??
+        p.price ??
+        null,
+      mrp: p.mrp ?? null,
+      rating: p.rating ?? 0,
+      rating_count: p.rating_count ?? 0,
+      created_at: p.created_at,
+      stock: p.product_variants?.[0]?.stock ?? null,
+      imagePath: p.product_images?.[0]?.storage_path ?? null,
+    }))
+  }
+
+  return {
+    props: {
+      products: normalize(data),
+    },
+  }
 }

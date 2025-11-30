@@ -1,4 +1,4 @@
-// pages/api/seller/create-product.js
+// pages/api/seller/proxy-create-product.js
 import { supabase } from '../../../lib/supabaseClient'
 
 export default async function handler(req, res) {
@@ -7,16 +7,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get current session so we can forward the JWT to the Edge Function
-    const { data, error: sessionError } = await supabase.auth.getSession()
+    // Try getting session normally
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession()
+
     if (sessionError) {
-      console.error('getSession error', sessionError)
-      return res.status(500).json({ error: 'auth_session_failed', detail: sessionError.message })
+      console.warn('Auth session fetch warning:', sessionError.message)
     }
 
-    const session = data?.session
-    if (!session) {
-      return res.status(401).json({ error: 'not_authenticated' })
+    const session = sessionData?.session
+    if (!session?.access_token) {
+      return res.status(401).json({ error: 'User not authenticated' })
     }
 
     const token = session.access_token
@@ -29,28 +30,31 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(req.body), // req.body is DIRECTLY product payload now
     })
 
     const text = await resp.text()
     let json
     try {
       json = text ? JSON.parse(text) : {}
-    } catch {
+    } catch (e) {
       json = { raw: text }
     }
 
     if (!resp.ok) {
-      console.error('Edge create-product error:', json)
-      return res.status(resp.status).json(json)
+      console.error('❌ Edge create-product Error →', json)
+      return res.status(resp.status).json({
+        error: json.error || 'Edge function error',
+        detail: json.detail || json,
+      })
     }
 
     return res.status(200).json(json)
   } catch (err) {
-    console.error('Proxy create-product failed', err)
+    console.error('❌ proxy-create-product failed:', err)
     return res.status(500).json({
       error: 'proxy_failed',
-      message: err.message || String(err),
+      detail: err.message || String(err),
     })
   }
 }
