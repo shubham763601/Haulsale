@@ -8,8 +8,10 @@ import { useCart } from '../context/CartContext'
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { items, total, clearCart } = useCart() || {}
+  const { items = [], subtotal = 0, clearCart } = useCart() || {}
+
   const [user, setUser] = useState(null)
+  const [accessToken, setAccessToken] = useState(null)
   const [loadingUser, setLoadingUser] = useState(true)
 
   const [addresses, setAddresses] = useState([])
@@ -34,25 +36,35 @@ export default function CheckoutPage() {
     is_default: false,
   })
 
-  // Load session → if not logged in, redirect to login
+  // ---- money values (same source of truth as cart) ----
+  const ITEMS_TOTAL = Number(subtotal || 0)
+  const SHIPPING_FEE = ITEMS_TOTAL > 0 ? 149 : 0
+  const HANDLING_FEE = ITEMS_TOTAL > 0 ? 99 : 0
+  const PAYABLE = ITEMS_TOTAL + SHIPPING_FEE + HANDLING_FEE
+
+  // ─────────────────────
+  // Session / auth
+  // ─────────────────────
   useEffect(() => {
     let mounted = true
     async function loadSession() {
       setLoadingUser(true)
       const { data } = await supabase.auth.getSession()
-      const sessionUser = data?.session?.user || null
+      const session = data?.session || null
 
       if (!mounted) return
 
-      if (!sessionUser) {
+      if (!session?.user) {
         setUser(null)
+        setAccessToken(null)
         setLoadingUser(false)
         // redirect to login with next=/checkout
         router.replace('/auth/login?next=/checkout')
         return
       }
 
-      setUser(sessionUser)
+      setUser(session.user)
+      setAccessToken(session.access_token || null)
       setLoadingUser(false)
     }
     loadSession()
@@ -61,7 +73,9 @@ export default function CheckoutPage() {
     }
   }, [router])
 
-  // Load addresses when user is known
+  // ─────────────────────
+  // Load addresses
+  // ─────────────────────
   useEffect(() => {
     if (!user) return
     let active = true
@@ -83,12 +97,9 @@ export default function CheckoutPage() {
         setAddresses([])
       } else {
         setAddresses(data || [])
-        // pick default if exists; else first
         const defaultAddr = (data || []).find((a) => a.is_default)
         const firstAddr = (data || [])[0]
-        setSelectedAddressId(
-          defaultAddr?.id || firstAddr?.id || null
-        )
+        setSelectedAddressId(defaultAddr?.id || firstAddr?.id || null)
       }
       setLoadingAddresses(false)
     }
@@ -99,6 +110,9 @@ export default function CheckoutPage() {
     }
   }, [user])
 
+  // ─────────────────────
+  // Address helpers
+  // ─────────────────────
   function handleAddressFieldChange(field, value) {
     setAddressForm((f) => ({ ...f, [field]: value }))
   }
@@ -129,7 +143,6 @@ export default function CheckoutPage() {
         setAddresses(nextList)
         setSelectedAddressId(data.id)
         setNewAddressOpen(false)
-        // simple reset
         setAddressForm({
           label: 'Home',
           recipient_name: '',
@@ -155,8 +168,12 @@ export default function CheckoutPage() {
     return addresses.find((a) => a.id === selectedAddressId) || null
   }
 
+  // ─────────────────────
+  // Place order
+  // ─────────────────────
   async function handlePlaceOrder() {
     setError(null)
+
     if (!user) {
       router.push('/auth/login?next=/checkout')
       return
@@ -175,7 +192,6 @@ export default function CheckoutPage() {
 
     setPlacing(true)
     try {
-      // transform cart items into shape expected by Edge function
       const payloadItems = items.map((it) => ({
         product_id: it.product_id,
         variant_id: it.variant_id || null,
@@ -195,12 +211,28 @@ export default function CheckoutPage() {
         shipping_country: addr.country,
       }
 
+      // include amounts so Edge function can store them
+      const amounts = {
+        items_total: ITEMS_TOTAL,
+        shipping_fee: SHIPPING_FEE,
+        handling_fee: HANDLING_FEE,
+        grand_total: PAYABLE,
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+      }
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`
+      }
+
       const resp = await fetch('/api/proxy-create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           items: payloadItems,
           shipping_address,
+          amounts,
         }),
       })
 
@@ -213,7 +245,6 @@ export default function CheckoutPage() {
         return
       }
 
-      // clear cart + go to success page
       if (typeof clearCart === 'function') {
         clearCart()
       }
@@ -226,6 +257,9 @@ export default function CheckoutPage() {
     }
   }
 
+  // ─────────────────────
+  // Loading state
+  // ─────────────────────
   if (loadingUser) {
     return (
       <>
@@ -239,6 +273,9 @@ export default function CheckoutPage() {
     )
   }
 
+  // ─────────────────────
+  // Page UI
+  // ─────────────────────
   return (
     <>
       <Head>
@@ -253,9 +290,8 @@ export default function CheckoutPage() {
             Checkout
           </h1>
 
-          {/* layout: left addresses, right order summary */}
           <div className="grid gap-4 lg:grid-cols-[2fr,1.2fr] items-start">
-            {/* LEFT: Addresses */}
+            {/* LEFT: addresses */}
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -333,7 +369,7 @@ export default function CheckoutPage() {
               )}
             </section>
 
-            {/* RIGHT: Order summary */}
+            {/* RIGHT: order summary */}
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
               <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Order summary
@@ -380,15 +416,19 @@ export default function CheckoutPage() {
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between text-xs text-slate-600">
                       <span>Items total</span>
-                      <span>₹{Number(total || 0).toFixed(2)}</span>
+                      <span>₹{ITEMS_TOTAL.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-xs text-slate-600">
-                      <span>Shipping</span>
-                      <span>₹0.00</span>
+                      <span>Delivery fee</span>
+                      <span>₹{SHIPPING_FEE.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Handling fee</span>
+                      <span>₹{HANDLING_FEE.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-semibold text-slate-900 border-t border-slate-200 pt-2 mt-1">
                       <span>Payable amount</span>
-                      <span>₹{Number(total || 0).toFixed(2)}</span>
+                      <span>₹{PAYABLE.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -409,7 +449,7 @@ export default function CheckoutPage() {
             </section>
           </div>
 
-          {/* New address form modal-like section (inline) */}
+          {/* Inline "Add new address" form */}
           {newAddressOpen && (
             <section className="mt-6 max-w-3xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
               <div className="flex items-center justify-between mb-3">
@@ -450,7 +490,10 @@ export default function CheckoutPage() {
                     required
                     value={addressForm.recipient_name}
                     onChange={(e) =>
-                      handleAddressFieldChange('recipient_name', e.target.value)
+                      handleAddressFieldChange(
+                        'recipient_name',
+                        e.target.value
+                      )
                     }
                     className="rounded-md border border-slate-200 px-2 py-1.5 text-sm bg-white"
                   />

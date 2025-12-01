@@ -1,26 +1,18 @@
 // pages/api/proxy-create-order.js
-import { supabase } from '../../lib/supabaseClient'
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    const { data, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError) {
-      console.error('getSession error', sessionError)
-      return res
-        .status(500)
-        .json({ error: 'auth_session_failed', detail: sessionError.message })
-    }
+    // Get token from Authorization header sent by the browser
+    const authHeader = req.headers.authorization || req.headers.Authorization || ''
+    const token = authHeader.replace('Bearer', '').trim()
 
-    const session = data?.session
-    if (!session) {
+    if (!token) {
       return res.status(401).json({ error: 'not_authenticated' })
     }
 
-    const token = session.access_token
     const fnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-order`
 
     const resp = await fetch(fnUrl, {
