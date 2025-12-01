@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
 import UserContext from '../lib/userContext'
-import { useCart } from '../context/CartContext' // ✅ new cart hook
+import { useCart } from '../context/CartContext' // ✅ cart hook
 
 export default function NavBar() {
   const router = useRouter()
@@ -28,6 +28,19 @@ export default function NavBar() {
     loadSession()
     return () => { mounted = false }
   }, [])
+
+  // pre-fill search from URL (?q=...) when on /products
+  useEffect(() => {
+    const qFromUrl =
+      (router.query.q || router.query.search || '') as string | string[]
+    const q =
+      typeof qFromUrl === 'string'
+        ? qFromUrl
+        : Array.isArray(qFromUrl)
+        ? qFromUrl[0]
+        : ''
+    setSearch(q || '')
+  }, [router.query.q, router.query.search])
 
   // scroll listener → collapse navbar on scroll
   useEffect(() => {
@@ -53,7 +66,8 @@ export default function NavBar() {
     const q = search.trim()
     if (!q) return
     setMenuOpen(false)
-    router.push(`/products?search=${encodeURIComponent(q)}`)
+    // 🔥 IMPORTANT: products page expects ?q=
+    router.push(`/products?q=${encodeURIComponent(q)}`)
   }
 
   const links = [
@@ -66,7 +80,13 @@ export default function NavBar() {
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-3 sm:px-4 lg:px-6 py-2">
         {/* LEFT: logo (hidden when scrolled tight) */}
-        <div className={`flex items-center gap-2 transition-opacity duration-200 ${isScrolled ? 'opacity-0 pointer-events-none hidden sm:hidden' : 'opacity-100'}`}>
+        <div
+          className={`flex items-center gap-2 transition-opacity duration-200 ${
+            isScrolled
+              ? 'opacity-0 pointer-events-none hidden sm:hidden'
+              : 'opacity-100'
+          }`}
+        >
           <button
             onClick={() => router.push('/')}
             className="flex items-center gap-2 text-slate-900"
@@ -80,7 +100,7 @@ export default function NavBar() {
           </button>
         </div>
 
-        {/* CENTER: search bar (always visible, expands when scrolled) */}
+        {/* CENTER: search bar (always visible) */}
         <div className={`flex-1 px-2 ${isScrolled ? '' : 'max-w-xl'}`}>
           <form
             onSubmit={handleSearchSubmit}
@@ -90,7 +110,7 @@ export default function NavBar() {
             <input
               type="text"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search products, categories…"
               className="flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
             />
@@ -103,7 +123,7 @@ export default function NavBar() {
           </form>
         </div>
 
-        {/* RIGHT: cart + menu (menu hidden when scrolled tight, as you asked) */}
+        {/* RIGHT: cart + menu */}
         <div className="flex items-center gap-2">
           {/* Cart */}
           <button
@@ -136,7 +156,7 @@ export default function NavBar() {
           {!isScrolled && (
             <button
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:border-indigo-400"
-              onClick={() => setMenuOpen(v => !v)}
+              onClick={() => setMenuOpen((v) => !v)}
               aria-label="Toggle navigation"
             >
               {menuOpen ? (
@@ -149,13 +169,13 @@ export default function NavBar() {
         </div>
       </nav>
 
-      {/* DROPDOWN MENU (for both mobile + desktop, holds links + auth) */}
+      {/* DROPDOWN MENU */}
       {menuOpen && !isScrolled && (
         <div className="border-t border-slate-200 bg-white">
           <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-3 text-sm">
             {/* Primary links */}
             <div className="flex flex-col gap-1 pb-3">
-              {links.map(link => (
+              {links.map((link) => (
                 <Link key={link.href} href={link.href}>
                   <a
                     onClick={() => setMenuOpen(false)}
