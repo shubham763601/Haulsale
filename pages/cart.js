@@ -1,12 +1,20 @@
 // pages/cart.js
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import NavBar from '../components/NavBar'
 import { useCart } from '../context/CartContext'
 
 export default function CartPage() {
+  const router = useRouter()
   const { items, updateQty, removeItem, clearCart, subtotal } = useCart()
 
-  const hasItems = items.length > 0
+  const hasItems = items && items.length > 0
+
+  function handleCheckout() {
+    if (!hasItems) return
+    // ✅ No alert, just go to checkout
+    router.push('/checkout')
+  }
 
   return (
     <>
@@ -53,9 +61,9 @@ export default function CartPage() {
                     </div>
 
                     <div className="flex-1">
-                      <div className="flex justify-between">
-                        <div>
-                          <h2 className="text-sm font-medium text-slate-900">
+                      <div className="flex justify-between gap-2">
+                        <div className="min-w-0">
+                          <h2 className="text-sm font-medium text-slate-900 line-clamp-2">
                             {item.title}
                           </h2>
                           {item.stock != null && (
@@ -64,7 +72,7 @@ export default function CartPage() {
                             </p>
                           )}
                         </div>
-                        <div className="text-sm font-semibold text-slate-900">
+                        <div className="text-sm font-semibold text-slate-900 whitespace-nowrap">
                           ₹{(item.price * item.qty).toFixed(2)}
                         </div>
                       </div>
@@ -134,10 +142,11 @@ export default function CartPage() {
                 </div>
 
                 <button
-                  className="mt-4 w-full rounded-lg bg-emerald-600 text-white py-2.5 text-sm font-semibold hover:bg-emerald-500"
-                  onClick={() => alert('Checkout coming soon')}
+                  className="mt-4 w-full rounded-lg bg-emerald-600 text-white py-2.5 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  onClick={handleCheckout}
+                  disabled={!hasItems}
                 >
-                  Place order
+                  Proceed to checkout
                 </button>
 
                 <button
