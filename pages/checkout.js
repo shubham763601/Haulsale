@@ -20,6 +20,8 @@ export default function CheckoutPage() {
 
   const [savingAddress, setSavingAddress] = useState(false)
   const [newAddressOpen, setNewAddressOpen] = useState(false)
+  const [editingAddressId, setEditingAddressId] = useState(null)
+
   const [placing, setPlacing] = useState(false)
   const [error, setError] = useState(null)
 
@@ -58,7 +60,6 @@ export default function CheckoutPage() {
         setUser(null)
         setAccessToken(null)
         setLoadingUser(false)
-        // redirect to login with next=/checkout
         router.replace('/auth/login?next=/checkout')
         return
       }
@@ -117,6 +118,40 @@ export default function CheckoutPage() {
     setAddressForm((f) => ({ ...f, [field]: value }))
   }
 
+  function openNewAddressForm() {
+    setEditingAddressId(null)
+    setAddressForm({
+      label: 'Home',
+      recipient_name: '',
+      phone: '',
+      line1: '',
+      line2: '',
+      city: '',
+      state: '',
+      pincode: '',
+      country: 'India',
+      is_default: false,
+    })
+    setNewAddressOpen(true)
+  }
+
+  function openEditAddressForm(addr) {
+    setEditingAddressId(addr.id)
+    setAddressForm({
+      label: addr.label || 'Home',
+      recipient_name: addr.recipient_name || '',
+      phone: addr.phone || '',
+      line1: addr.line1 || '',
+      line2: addr.line2 || '',
+      city: addr.city || '',
+      state: addr.state || '',
+      pincode: addr.pincode || '',
+      country: addr.country || 'India',
+      is_default: !!addr.is_default,
+    })
+    setNewAddressOpen(true)
+  }
+
   async function handleSaveAddress(e) {
     e?.preventDefault()
     if (!user) return
@@ -129,33 +164,59 @@ export default function CheckoutPage() {
         user_id: user.id,
       }
 
-      const { data, error } = await supabase
-        .from('addresses')
-        .insert(payload)
-        .select()
-        .single()
+      if (editingAddressId) {
+        // UPDATE existing address
+        const { data, error } = await supabase
+          .from('addresses')
+          .update(payload)
+          .eq('id', editingAddressId)
+          .eq('user_id', user.id)
+          .select()
+          .single()
 
-      if (error) {
-        console.error('insert address error', error)
-        setError(error.message || 'Failed to save address')
+        if (error) {
+          console.error('update address error', error)
+          setError(error.message || 'Failed to update address')
+        } else {
+          setAddresses((prev) =>
+            prev.map((a) => (a.id === data.id ? data : a))
+          )
+          setSelectedAddressId(data.id)
+          setNewAddressOpen(false)
+          setEditingAddressId(null)
+        }
       } else {
-        const nextList = [...addresses, data]
-        setAddresses(nextList)
-        setSelectedAddressId(data.id)
-        setNewAddressOpen(false)
-        setAddressForm({
-          label: 'Home',
-          recipient_name: '',
-          phone: '',
-          line1: '',
-          line2: '',
-          city: '',
-          state: '',
-          pincode: '',
-          country: 'India',
-          is_default: false,
-        })
+        // INSERT new address
+        const { data, error } = await supabase
+          .from('addresses')
+          .insert(payload)
+          .select()
+          .single()
+
+        if (error) {
+          console.error('insert address error', error)
+          setError(error.message || 'Failed to save address')
+        } else {
+          const nextList = [...addresses, data]
+          setAddresses(nextList)
+          setSelectedAddressId(data.id)
+          setNewAddressOpen(false)
+        }
       }
+
+      // reset form after any successful save
+      setAddressForm({
+        label: 'Home',
+        recipient_name: '',
+        phone: '',
+        line1: '',
+        line2: '',
+        city: '',
+        state: '',
+        pincode: '',
+        country: 'India',
+        is_default: false,
+      })
     } catch (err) {
       console.error(err)
       setError('Unexpected error saving address')
@@ -211,7 +272,6 @@ export default function CheckoutPage() {
         shipping_country: addr.country,
       }
 
-      // include amounts so Edge function can store them
       const amounts = {
         items_total: ITEMS_TOTAL,
         shipping_fee: SHIPPING_FEE,
@@ -219,9 +279,7 @@ export default function CheckoutPage() {
         grand_total: PAYABLE,
       }
 
-      const headers = {
-        'Content-Type': 'application/json',
-      }
+      const headers = { 'Content-Type': 'application/json' }
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`
       }
@@ -265,9 +323,7 @@ export default function CheckoutPage() {
       <>
         <NavBar />
         <main className="min-h-screen flex items-center justify-center bg-slate-50">
-          <div className="text-sm text-slate-500">
-            Checking your session…
-          </div>
+          <div className="text-sm text-slate-500">Checking your session…</div>
         </main>
       </>
     )
@@ -276,6 +332,8 @@ export default function CheckoutPage() {
   // ─────────────────────
   // Page UI
   // ─────────────────────
+  const hasItems = items && items.length > 0
+
   return (
     <>
       <Head>
@@ -285,7 +343,7 @@ export default function CheckoutPage() {
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <NavBar />
 
-        <main className="flex-1 mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-4 lg:py-6">
+        <main className="flex-1 mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-4 lg:py-6 pb-24">
           <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 mb-4">
             Checkout
           </h1>
@@ -303,7 +361,7 @@ export default function CheckoutPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setNewAddressOpen(true)}
+                  onClick={openNewAddressForm}
                   className="text-xs font-semibold text-indigo-600 hover:text-indigo-500"
                 >
                   + New address
@@ -311,9 +369,7 @@ export default function CheckoutPage() {
               </div>
 
               {loadingAddresses && (
-                <p className="text-xs text-slate-500">
-                  Loading addresses…
-                </p>
+                <p className="text-xs text-slate-500">Loading addresses…</p>
               )}
 
               {!loadingAddresses && addresses.length === 0 && (
@@ -324,15 +380,14 @@ export default function CheckoutPage() {
 
               <div className="mt-2 space-y-2">
                 {addresses.map((addr) => (
-                  <button
+                  <div
                     key={addr.id}
-                    type="button"
-                    onClick={() => setSelectedAddressId(addr.id)}
-                    className={`w-full text-left rounded-xl border px-3 py-2 text-xs sm:text-sm transition ${
+                    className={`w-full rounded-xl border px-3 py-2 text-xs sm:text-sm transition cursor-pointer ${
                       selectedAddressId === addr.id
                         ? 'border-indigo-500 bg-indigo-50'
                         : 'border-slate-200 bg-white hover:border-slate-300'
                     }`}
+                    onClick={() => setSelectedAddressId(addr.id)}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="font-semibold text-slate-900">
@@ -343,11 +398,23 @@ export default function CheckoutPage() {
                           </span>
                         ) : null}
                       </div>
-                      {addr.is_default && (
-                        <span className="text-[10px] text-emerald-600 font-medium">
-                          Default
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {addr.is_default && (
+                          <span className="text-[10px] text-emerald-600 font-medium">
+                            Default
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditAddressForm(addr)
+                          }}
+                          className="text-[11px] text-indigo-600 hover:text-indigo-500"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </div>
                     <div className="text-xs text-slate-600">
                       <div>{addr.phone}</div>
@@ -360,7 +427,7 @@ export default function CheckoutPage() {
                       </div>
                       <div>{addr.country}</div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
 
@@ -375,7 +442,7 @@ export default function CheckoutPage() {
                 Order summary
               </h2>
 
-              {!items || items.length === 0 ? (
+              {!hasItems ? (
                 <p className="text-xs text-slate-500">
                   Your cart is empty. Add items to continue.
                 </p>
@@ -439,34 +506,24 @@ export default function CheckoutPage() {
                       <span>₹{PAYABLE.toFixed(2)}</span>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={handlePlaceOrder}
-                    disabled={placing || !items || items.length === 0}
-                    className={`mt-4 w-full rounded-full py-2.5 text-sm font-semibold shadow ${
-                      placing
-                        ? 'bg-slate-400 text-white cursor-wait'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-500'
-                    }`}
-                  >
-                    {placing ? 'Placing order…' : 'Place order'}
-                  </button>
                 </>
               )}
             </section>
           </div>
 
-          {/* Inline "Add new address" form */}
+          {/* Inline "Add / Edit address" form */}
           {newAddressOpen && (
             <section className="mt-6 max-w-3xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-slate-900">
-                  Add new address
+                  {editingAddressId ? 'Edit address' : 'Add new address'}
                 </h2>
                 <button
                   type="button"
-                  onClick={() => setNewAddressOpen(false)}
+                  onClick={() => {
+                    setNewAddressOpen(false)
+                    setEditingAddressId(null)
+                  }}
                   className="text-xs text-slate-500 hover:text-slate-700"
                 >
                   ✕ Close
@@ -508,9 +565,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-slate-600">
-                    Phone
-                  </label>
+                  <label className="text-[11px] text-slate-600">Phone</label>
                   <input
                     required
                     value={addressForm.phone}
@@ -522,9 +577,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-slate-600">
-                    Line 1
-                  </label>
+                  <label className="text-[11px] text-slate-600">Line 1</label>
                   <input
                     required
                     value={addressForm.line1}
@@ -549,9 +602,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-slate-600">
-                    City
-                  </label>
+                  <label className="text-[11px] text-slate-600">City</label>
                   <input
                     required
                     value={addressForm.city}
@@ -563,9 +614,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-slate-600">
-                    State
-                  </label>
+                  <label className="text-[11px] text-slate-600">State</label>
                   <input
                     required
                     value={addressForm.state}
@@ -577,9 +626,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-slate-600">
-                    Pincode
-                  </label>
+                  <label className="text-[11px] text-slate-600">Pincode</label>
                   <input
                     required
                     value={addressForm.pincode}
@@ -591,9 +638,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-slate-600">
-                    Country
-                  </label>
+                  <label className="text-[11px] text-slate-600">Country</label>
                   <input
                     value={addressForm.country}
                     onChange={(e) =>
@@ -627,7 +672,10 @@ export default function CheckoutPage() {
                 <div className="sm:col-span-2 mt-3 flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setNewAddressOpen(false)}
+                    onClick={() => {
+                      setNewAddressOpen(false)
+                      setEditingAddressId(null)
+                    }}
                     className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300"
                   >
                     Cancel
@@ -641,13 +689,49 @@ export default function CheckoutPage() {
                         : 'bg-indigo-600 hover:bg-indigo-500'
                     }`}
                   >
-                    {savingAddress ? 'Saving…' : 'Save address'}
+                    {savingAddress
+                      ? 'Saving…'
+                      : editingAddressId
+                      ? 'Update address'
+                      : 'Save address'}
                   </button>
                 </div>
               </form>
             </section>
           )}
         </main>
+
+        {/* Bottom bar like Flipkart */}
+        {hasItems && (
+          <div className="fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur">
+            <div className="mx-auto max-w-6xl px-3 sm:px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
+              <div className="text-sm">
+                <div className="text-[11px] text-slate-500">
+                  Payable amount
+                </div>
+                <div className="text-base font-semibold text-slate-900">
+                  ₹{PAYABLE.toFixed(2)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={placing || !hasItems}
+                className={`rounded-full px-6 py-2.5 text-sm font-semibold shadow ${
+                  placing
+                    ? 'bg-slate-400 text-white cursor-wait'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                }`}
+              >
+                {placing
+                  ? 'Placing order…'
+                  : `Place order (${items.length} item${
+                      items.length > 1 ? 's' : ''
+                    })`}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
