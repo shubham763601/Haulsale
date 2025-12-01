@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
 import UserContext from '../lib/userContext'
-import { useCart } from '../context/CartContext' // ✅ cart hook
+import { useCart } from '../context/CartContext' // cart hook
 
 export default function NavBar() {
   const router = useRouter()
@@ -26,19 +26,17 @@ export default function NavBar() {
       }
     }
     loadSession()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // pre-fill search from URL (?q=...) when on /products
+  // pre-fill search from URL (?q=... or ?search=...)
   useEffect(() => {
-    const qFromUrl =
-      (router.query.q || router.query.search || '') as string | string[]
-    const q =
-      typeof qFromUrl === 'string'
-        ? qFromUrl
-        : Array.isArray(qFromUrl)
-        ? qFromUrl[0]
-        : ''
+    const raw =
+      (router.query && (router.query.q || router.query.search)) || ''
+    const q = Array.isArray(raw) ? raw[0] : raw
     setSearch(q || '')
   }, [router.query.q, router.query.search])
 
@@ -66,7 +64,7 @@ export default function NavBar() {
     const q = search.trim()
     if (!q) return
     setMenuOpen(false)
-    // 🔥 IMPORTANT: products page expects ?q=
+    // products page expects ?q=
     router.push(`/products?q=${encodeURIComponent(q)}`)
   }
 
@@ -91,7 +89,7 @@ export default function NavBar() {
             onClick={() => router.push('/')}
             className="flex items-center gap-2 text-slate-900"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white text-sm font-bold">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-sm font-bold shadow-sm">
               Hc
             </div>
             <span className="hidden sm:inline text-base font-semibold tracking-tight">
@@ -100,23 +98,26 @@ export default function NavBar() {
           </button>
         </div>
 
-        {/* CENTER: search bar (always visible) */}
+        {/* CENTER: search bar (always visible, more highlighted) */}
         <div className={`flex-1 px-2 ${isScrolled ? '' : 'max-w-xl'}`}>
           <form
             onSubmit={handleSearchSubmit}
-            className="flex items-center gap-2 rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition"
+            className="flex items-center gap-2 rounded-full bg-slate-50 border border-indigo-200/70 px-3 py-1.5 shadow-xs
+                       focus-within:border-indigo-500 focus-within:bg-white focus-within:shadow-md transition"
           >
-            <span className="text-slate-400 text-sm">🔍</span>
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-indigo-500 text-xs">
+              🔍
+            </span>
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search products, categories…"
+              placeholder="Search products, brands, categories…"
               className="flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
             />
             <button
               type="submit"
-              className="hidden sm:inline-flex rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500"
+              className="hidden sm:inline-flex rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 active:scale-95 transition"
             >
               Search
             </button>
@@ -125,15 +126,16 @@ export default function NavBar() {
 
         {/* RIGHT: cart + menu */}
         <div className="flex items-center gap-2">
-          {/* Cart */}
+          {/* Cart – more highlighted */}
           <button
             onClick={() => router.push('/cart')}
-            className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white hover:border-indigo-400"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-white shadow-sm
+                       hover:bg-indigo-500 active:scale-95 transition"
             aria-label="Cart"
           >
             <svg
               viewBox="0 0 24 24"
-              className="h-4 w-4 text-slate-600"
+              className="h-4 w-4"
               aria-hidden="true"
             >
               <path
@@ -146,7 +148,7 @@ export default function NavBar() {
               />
             </svg>
             {totalCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-semibold text-slate-900 shadow ring-1 ring-amber-100">
                 {totalCount}
               </span>
             )}
@@ -155,7 +157,7 @@ export default function NavBar() {
           {/* Hamburger menu: only when not collapsed */}
           {!isScrolled && (
             <button
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:border-indigo-400"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:border-indigo-400 shadow-xs"
               onClick={() => setMenuOpen((v) => !v)}
               aria-label="Toggle navigation"
             >
