@@ -419,6 +419,14 @@ export default function CheckoutPage() {
                       <span>₹{ITEMS_TOTAL.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-xs text-slate-600">
+                      <span>Items total</span>
+                      <span>₹{ITEMS_TOTAL.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Items total</span>
+                      <span>₹{ITEMS_TOTAL.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-600">
                       <span>Delivery fee</span>
                       <span>₹{SHIPPING_FEE.toFixed(2)}</span>
                     </div>
