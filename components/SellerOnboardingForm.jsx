@@ -116,116 +116,151 @@ export default function SellerOnboardingForm() {
     setSaving(true);
     setError(null);
     setSuccessMsg(null);
+  
     try {
       if (!user) throw new Error("Not authenticated");
       if (!form.business_name) throw new Error("Business name is required");
-
+  
       const payload = {
         ...form,
         user_id: user.id,
-        seller_status: "draft"
+        seller_status: "draft",
+        updated_at: new Date().toISOString()
       };
-
+  
       if (seller?.id) {
+        // update existing
         const { data, error } = await supabase
           .from("sellers")
           .update(payload)
           .eq("id", seller.id)
           .select()
           .maybeSingle();
-
+  
         if (error) throw error;
         setSeller(data);
         setSuccessMsg("Draft updated");
+        return data;
       } else {
+        // insert new
         const { data, error } = await supabase
           .from("sellers")
           .insert(payload)
           .select()
           .maybeSingle();
-
+  
         if (error) throw error;
         setSeller(data);
         setSuccessMsg("Draft saved");
+        return data;
       }
     } catch (err) {
-      console.error(err);
+      console.error("saveDraft error", err);
       setError(err.message || "Failed to save draft");
+      return null;
     } finally {
       setSaving(false);
     }
   }
 
+
   async function submitForReview() {
     setSaving(true);
     setError(null);
     setSuccessMsg(null);
+  
     try {
-      if (!seller?.id) {
-        await saveDraft();
-        const { data: s } = await supabase
-          .from("sellers")
-          .select("*")
-          .eq("user_id", user.id)
-          .limit(1)
-          .maybeSingle();
-        setSeller(s);
+      if (!user) throw new Error("Not authenticated");
+  
+      // Ensure seller exists and get a valid id
+      let currentSeller = seller;
+      if (!currentSeller?.id) {
+        // create or update draft and get result
+        currentSeller = await saveDraft();
+        if (!currentSeller?.id) {
+          throw new Error("Unable to create seller record before submission");
+        }
       }
-
+  
+      // Double-check by fetching by user_id (defensive)
+      const { data: fetched, error: fetchErr } = await supabase
+        .from("sellers")
+        .select("*")
+        .eq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+  
+      if (fetchErr) {
+        console.warn("Warning - could not fetch seller after save:", fetchErr);
+      }
+      if (fetched && fetched.id) currentSeller = fetched;
+  
+      if (!currentSeller?.id) {
+        throw new Error("Seller id missing - cannot submit");
+      }
+  
+      // Now update status safely
       const { data, error } = await supabase
         .from("sellers")
         .update({
           seller_status: "submitted",
           updated_at: new Date().toISOString()
         })
-        .eq("id", seller?.id)
+        .eq("id", currentSeller.id)
         .select()
         .maybeSingle();
-
+  
       if (error) throw error;
       setSeller(data);
       setSuccessMsg("Submitted for review");
       setStep(4);
     } catch (err) {
-      console.error(err);
+      console.error("submitForReview error", err);
       setError(err.message || "Failed to submit");
     } finally {
       setSaving(false);
     }
   }
 
+
   async function handleUploadFile(file, docType) {
     setUploading(true);
     setError(null);
+    setSuccessMsg(null);
+  
     try {
       if (!user) throw new Error("Not authenticated");
-
-      if (!seller?.id) {
-        await saveDraft();
-        const { data: s } = await supabase
-          .from("sellers")
-          .select("*")
-          .eq("user_id", user.id)
-          .limit(1)
-          .maybeSingle();
-        setSeller(s);
+  
+      // Ensure seller exists
+      let currentSeller = seller;
+      if (!currentSeller?.id) {
+        currentSeller = await saveDraft();
+        if (!currentSeller?.id) throw new Error("Create seller draft first before uploading documents");
       }
-
+  
       const filename = `${Date.now()}_${file.name.replace(/\s/g, "_")}`;
-      const path = `${seller?.id || "temp"}/${filename}`;
-
+      const path = `${currentSeller.id}/${filename}`;
+  
+      // Attempt upload
       const { data: uploadData, error: uploadErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { cacheControl: "3600", upsert: false });
-
-      if (uploadErr) throw uploadErr;
-
+  
+      if (uploadErr) {
+        // Nice error message if bucket doesn't exist
+        if (uploadErr.message && uploadErr.message.toLowerCase().includes("bucket")) {
+          throw new Error(`Storage error: ${uploadErr.message}. Did you create the storage bucket "${BUCKET}"?`);
+        }
+        throw uploadErr;
+      }
+  
       const storagePath = uploadData.path;
-
+  
+      // Insert metadata row in seller_documents
       const { data: docRow, error: docErr } = await supabase
         .from("seller_documents")
         .insert({
-          seller_id: seller.id,
+          seller_id: currentSeller.id,
           doc_type: docType,
           storage_path: storagePath,
           meta: {
@@ -236,21 +271,19 @@ export default function SellerOnboardingForm() {
         })
         .select()
         .maybeSingle();
-
+  
       if (docErr) throw docErr;
-
-      setDocs((prev) => [
-        ...prev.filter((d) => d.doc_type !== docType),
-        docRow
-      ]);
+  
+      setDocs(prev => [...prev.filter(d => d.doc_type !== docType), docRow]);
       setSuccessMsg(`Uploaded ${docType}`);
     } catch (err) {
-      console.error(err);
+      console.error("handleUploadFile error", err);
       setError(err.message || "Upload failed");
     } finally {
       setUploading(false);
     }
   }
+  
 
   if (loadingUser) {
     return (
