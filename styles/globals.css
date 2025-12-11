@@ -1,4 +1,4 @@
-/* globals.css  — for Tailwind 3.4.12 */
+/* styles/global.css  — Tailwind + custom utilities */
 
 /* Tailwind layers */
 @tailwind base;
@@ -21,7 +21,7 @@
   }
 }
 
-/* Reusable components (buttons, cards, etc.) */
+/* Reusable components (buttons, cards, inputs, page shell) */
 @layer components {
   .btn-primary {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-lg
@@ -37,8 +37,19 @@
            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
   }
 
+  /* Card base used across UI — rounded + subtle border */
   .card {
-    @apply bg-white border border-slate-200 rounded-2xl p-5 shadow-sm;
+    @apply bg-white border border-slate-200 rounded-2xl p-5;
+  }
+
+  /* Strong shadow variant when you want a shop/feature card */
+  .card-shadow {
+    box-shadow: 0 8px 28px rgba(2,6,23,0.06);
+    border-radius: 12px;
+    background: #fff;
+  }
+  .card-shadow:hover {
+    box-shadow: 0 12px 40px rgba(2,6,23,0.1);
   }
 
   .input {
@@ -50,26 +61,32 @@
     @apply max-w-6xl mx-auto px-4 py-6 sm:py-10;
   }
 }
-/* in styles/global.css */
-:root{
-  --accent:#7c3aed;
-  --muted:#94a3b8;
+
+/* Custom CSS variables */
+:root {
+  --brand-1: #0f2a78; /* deep indigo */
+  --brand-2: #4f46e5; /* violet */
+  --accent: #f59e0b;  /* amber */
+  --muted: #94a3b8;
 }
 
-/* button style */
+/* amber button helper (keeps previous naming) */
 .btn-amber {
-  background: #f59e0b;
+  background: var(--accent);
   color: #0f172a;
   border-radius: 8px;
   padding: .5rem .9rem;
+  display: inline-block;
+  font-weight: 600;
 }
 
-/* product card shadow */
-.card {
-  box-shadow: 0 8px 28px rgba(2,6,23,0.06);
-  border-radius: 12px;
-  background: #fff;
+/* small utility to keep a consistent product card look */
+.product-image-placeholder {
+  @apply h-20 w-20 rounded-md bg-slate-100 flex items-center justify-center text-xs text-slate-400;
 }
-.card:hover {
-  box-shadow: 0 12px 40px rgba(2,6,23,0.1);
+
+/* Accessibility helpers (focus outlines) */
+:focus {
+  outline: 2px solid rgba(79,70,229,0.12);
+  outline-offset: 2px;
 }

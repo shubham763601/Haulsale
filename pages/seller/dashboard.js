@@ -1,9 +1,9 @@
 // pages/seller/dashboard.js
-import React, { useEffect, useState } from "react";
-import SellerLayout from "../../components/seller/SellerLayout";
-import ProductCard from "../../components/seller/ProductCard";
-import ProductForm from "../../components/seller/ProductForm";
-import { supabase } from "../../lib/supabaseClient";
+import React, { useEffect, useState } from 'react';
+import SellerLayout from '../../components/seller/SellerLayout';
+import ProductCard from '../../components/seller/ProductCard';
+import ProductForm from '../../components/seller/ProductForm';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function SellerDashboard() {
   const [user, setUser] = useState(null);
@@ -11,42 +11,54 @@ export default function SellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [openForm, setOpenForm] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState('');
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data?.user || null);
-      await fetchProducts();
+      try {
+        const { data } = await supabase.auth.getUser();
+        setUser(data?.user ?? null);
+        await fetchProducts();
+      } catch (e) {
+        console.error('dashboard init error', e);
+      }
     })();
   }, []);
 
   async function fetchProducts() {
     setLoading(true);
-    // seller should see their own products (drafts + pending + approved)
-    const { data, error } = await supabase
-      .from("products")
-      .select(`
-        id, title, price, mrp, rating, rating_count, is_active, approved, created_at,
-        product_variants ( id, price, stock, moq, sku ),
-        product_images ( storage_path )
-      `)
-      .eq("seller_id", (await supabase.auth.getUser()).data?.user?.id)
-      .order("created_at", { ascending: false });
+    try {
+      const userId = (await supabase.auth.getUser()).data?.user?.id;
+      if (!userId) {
+        setProducts([]);
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      console.error("fetchProducts error", error);
-    } else {
+      // Seller sees OWN products (drafts + pending + approved)
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id, title, price, mrp, is_active, approved, created_at,
+          product_variants ( id, price, stock, moq, sku ),
+          product_images ( id, storage_path, alt_text, position )
+        `)
+        .eq('seller_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
       setProducts(data || []);
+    } catch (err) {
+      console.error('fetchProducts error', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   function openNew() {
     setEditProduct(null);
     setOpenForm(true);
   }
-
   function openEdit(p) {
     setEditProduct(p);
     setOpenForm(true);
@@ -54,15 +66,18 @@ export default function SellerDashboard() {
 
   return (
     <SellerLayout>
-      <div className="px-6 py-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-extrabold text-slate-900">Products</h2>
+      <div className="px-6 py-6 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold text-slate-900">Products</h1>
+            <p className="text-sm text-slate-500 mt-1">Manage your catalog — drafts stay private until approved.</p>
+          </div>
           <div className="flex items-center gap-3">
             <input
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm w-60"
               placeholder="Search products"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
             <button onClick={openNew} className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm">
               Add product
@@ -74,11 +89,13 @@ export default function SellerDashboard() {
           {loading ? (
             <div className="text-sm text-slate-500">Loading products…</div>
           ) : products.length === 0 ? (
-            <div className="rounded-md border border-dashed p-6 text-sm text-slate-500">No products yet. Click “Add product” to create a draft.</div>
+            <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-slate-500">
+              You don't have any products yet. Click <strong>Add product</strong> to create one.
+            </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4">
               {products
-                .filter((p) => p.title?.toLowerCase().includes(q.toLowerCase()))
+                .filter((p) => (p.title || '').toLowerCase().includes(q.toLowerCase()))
                 .map((p) => (
                   <ProductCard key={p.id} product={p} onEdit={() => openEdit(p)} refresh={fetchProducts} />
                 ))}
@@ -87,12 +104,7 @@ export default function SellerDashboard() {
         </div>
       </div>
 
-      {openForm && (
-        <ProductForm
-          onClose={() => { setOpenForm(false); fetchProducts(); }}
-          product={editProduct}
-        />
-      )}
+      {openForm && <ProductForm product={editProduct} onClose={() => { setOpenForm(false); fetchProducts(); }} />}
     </SellerLayout>
   );
 }
