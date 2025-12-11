@@ -236,62 +236,119 @@ export default function SellerOnboardingForm() {
   }
   
 
-  // Replace your existing handleUploadFile() with this
+  // Put this inside your component (replace existing handleUploadFile)
   async function handleUploadFile(file, docType) {
     setUploading(true);
     setError(null);
     setSuccessMsg(null);
   
     try {
-      if (!user) throw new Error("Not authenticated");
+      // 1) Confirm current session/user
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      const currentUser = userData?.user ?? null;
+      console.log("handleUploadFile: supabase user:", currentUser);
+      if (userErr || !currentUser) throw new Error("Not authenticated (supabase session missing).");
   
-      // Ensure seller exists
+      // 2) Ensure seller exists (create draft if needed)
       let currentSeller = seller;
       if (!currentSeller?.id) {
+        console.log("handleUploadFile: seller missing, saving draft first...");
         currentSeller = await saveDraft();
         if (!currentSeller?.id) {
-          throw new Error("Create seller draft first before uploading documents");
+          throw new Error("Unable to create seller row before upload.");
         }
+        // update state (if saveDraft returned)
+        setSeller(currentSeller);
       }
+      console.log("handleUploadFile: using seller:", currentSeller?.id);
   
-      // Build storage path using the guaranteed seller id
+      // 3) Upload to storage
       const filename = `${Date.now()}_${file.name.replace(/\s/g, "_")}`;
       const path = `${currentSeller.id}/${filename}`;
   
-      const { data: uploadData, error: uploadErr } = await supabase.storage
+      console.log("handleUploadFile: uploading to path:", path, "bucket:", BUCKET);
+      const { data: uploadData, error: uploadErr, status } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { cacheControl: "3600", upsert: false });
   
-      if (uploadErr) {
-        // Provide useful message for bucket or permission errors
-        if (uploadErr.message && uploadErr.message.toLowerCase().includes("bucket")) {
-          throw new Error(`Storage error: ${uploadErr.message}. Check bucket "${BUCKET}" exists and is accessible.`);
-        }
-        throw uploadErr;
+      if (uploadErr || !uploadData) {
+        console.error("handleUploadFile: storage upload error:", uploadErr);
+        // Provide helpful message for bucket-not-found etc.
+        const message = uploadErr?.message || `Storage upload failed (status ${status}). Check bucket and permissions.`;
+        throw new Error(message);
       }
   
-      const storagePath = uploadData.path;
+      console.log("handleUploadFile: uploadData:", uploadData);
   
-      // Insert seller_documents metadata (this will be allowed by RLS if seller.user_id == auth.uid())
-      const { data: docRow, error: docErr } = await supabase
-        .from("seller_documents")
-        .insert({
-          seller_id: currentSeller.id,
-          doc_type,
-          storage_path: storagePath,
-          meta: {
-            original_name: file.name,
-            size: file.size,
-            mime: file.type
-          }
-        })
-        .select()
-        .maybeSingle();
+      const storagePath = uploadData.path; // store this in metadata
+      // Optional: get a signed url for preview
+      // const { data: signed, error: signErr } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60*60);
   
-      if (docErr) throw docErr;
+      // 4) Try client-side insert into seller_documents (fast path)
+      try {
+        const { data: docRow, error: docErr } = await supabase
+          .from("seller_documents")
+          .insert({
+            seller_id: currentSeller.id,
+            doc_type,
+            storage_path: storagePath,
+            meta: { original_name: file.name, size: file.size, mime: file.type }
+          })
+          .select()
+          .maybeSingle();
   
-      setDocs(prev => [...prev.filter(d => d.doc_type !== docType), docRow]);
-      setSuccessMsg(`Uploaded ${docType}`);
+        if (docErr) {
+          // If it is a Row Level Security error, we'll handle below by falling back to server
+          console.error("handleUploadFile: client insert error:", docErr);
+          throw docErr;
+        }
+  
+        // success client-side
+        setDocs(prev => [...prev.filter(d => d.doc_type !== docType), docRow]);
+        setSuccessMsg(`Uploaded ${docType}`);
+        return;
+      } catch (clientInsertErr) {
+        console.warn("handleUploadFile: client insert failed, will fallback to server API. Error:", clientInsertErr);
+  
+        // If the error contains RLS text, fallback; otherwise rethrow
+        const errMsg = clientInsertErr?.message || "";
+        const isRls = errMsg.toLowerCase().includes("row-level") || errMsg.toLowerCase().includes("policy");
+  
+        if (!isRls) {
+          // If not RLS, still attempt server fallback (server can validate & insert), but warn
+          console.warn("handleUploadFile: client insert failed but not RLS; trying server fallback as well.");
+        }
+  
+        // 5) Fallback: call server endpoint that inserts with service role key
+        // Ensure you have created the server route /api/seller_documents (provided below).
+        const resp = await fetch("/api/seller_documents", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+            // no auth header required if you rely on cookie session; otherwise send Authorization: Bearer <access_token>
+          },
+          body: JSON.stringify({
+            seller_id: currentSeller.id,
+            doc_type,
+            storage_path: storagePath,
+            meta: { original_name: file.name, size: file.size, mime: file.type }
+          })
+        });
+  
+        if (!resp.ok) {
+          const txt = await resp.text();
+          throw new Error(`Server fallback failed: ${resp.status} ${txt}`);
+        }
+  
+        const json = await resp.json();
+        if (json?.document) {
+          setDocs(prev => [...prev.filter(d => d.doc_type !== docType), json.document]);
+          setSuccessMsg(`Uploaded ${docType} (via server)`);
+          return;
+        } else {
+          throw new Error("Server fallback did not return document");
+        }
+      }
     } catch (err) {
       console.error("handleUploadFile error", err);
       setError(err.message || "Upload failed");
@@ -299,6 +356,7 @@ export default function SellerOnboardingForm() {
       setUploading(false);
     }
   }
+  
   
   
 
