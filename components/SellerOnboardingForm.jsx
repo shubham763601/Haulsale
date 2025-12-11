@@ -236,55 +236,53 @@ export default function SellerOnboardingForm() {
   }
   
 
-  // Put this inside your component (replace existing handleUploadFile)
+
+    // inside your component - replace existing handleUploadFile
   async function handleUploadFile(file, docType) {
     setUploading(true);
     setError(null);
     setSuccessMsg(null);
   
     try {
-      // 1) Confirm current session/user
+      // 1) confirm user session
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       const currentUser = userData?.user ?? null;
       console.log("handleUploadFile: supabase user:", currentUser);
-      if (userErr || !currentUser) throw new Error("Not authenticated (supabase session missing).");
+      if (userErr || !currentUser) throw new Error("Not authenticated (no session)");
   
-      // 2) Ensure seller exists (create draft if needed)
+      // 2) ensure seller exists
       let currentSeller = seller;
       if (!currentSeller?.id) {
-        console.log("handleUploadFile: seller missing, saving draft first...");
+        console.log("handleUploadFile: creating draft seller before upload...");
         currentSeller = await saveDraft();
-        if (!currentSeller?.id) {
-          throw new Error("Unable to create seller row before upload.");
-        }
-        // update state (if saveDraft returned)
+        if (!currentSeller?.id) throw new Error("Cannot create seller before uploading documents");
         setSeller(currentSeller);
       }
-      console.log("handleUploadFile: using seller:", currentSeller?.id);
+      console.log("handleUploadFile: using seller:", currentSeller.id);
   
-      // 3) Upload to storage
+      // 3) upload to storage
       const filename = `${Date.now()}_${file.name.replace(/\s/g, "_")}`;
       const path = `${currentSeller.id}/${filename}`;
+      console.log("handleUploadFile: uploading to:", path, "bucket:", BUCKET);
   
-      console.log("handleUploadFile: uploading to path:", path, "bucket:", BUCKET);
-      const { data: uploadData, error: uploadErr, status } = await supabase.storage
+      const { data: uploadData, error: uploadErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { cacheControl: "3600", upsert: false });
   
+      // log full responses so we can inspect server output
+      console.log("handleUploadFile: uploadData:", uploadData);
+      console.log("handleUploadFile: uploadErr:", uploadErr);
+  
       if (uploadErr || !uploadData) {
-        console.error("handleUploadFile: storage upload error:", uploadErr);
-        // Provide helpful message for bucket-not-found etc.
-        const message = uploadErr?.message || `Storage upload failed (status ${status}). Check bucket and permissions.`;
-        throw new Error(message);
+        // log and surface the upload error message (inspect uploadErr)
+        const msg = uploadErr?.message || JSON.stringify(uploadErr) || "Upload failed (no data)";
+        throw new Error(`Storage upload error: ${msg}`);
       }
   
-      console.log("handleUploadFile: uploadData:", uploadData);
+      const storagePath = uploadData.path;
+      console.log("handleUploadFile: storagePath:", storagePath);
   
-      const storagePath = uploadData.path; // store this in metadata
-      // Optional: get a signed url for preview
-      // const { data: signed, error: signErr } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60*60);
-  
-      // 4) Try client-side insert into seller_documents (fast path)
+      // 4) try client-side insert into seller_documents (fast path)
       try {
         const { data: docRow, error: docErr } = await supabase
           .from("seller_documents")
@@ -297,58 +295,56 @@ export default function SellerOnboardingForm() {
           .select()
           .maybeSingle();
   
-        if (docErr) {
-          // If it is a Row Level Security error, we'll handle below by falling back to server
-          console.error("handleUploadFile: client insert error:", docErr);
-          throw docErr;
-        }
+        console.log("handleUploadFile: client insert result:", { docRow, docErr });
   
-        // success client-side
+        if (docErr) throw docErr;
+  
         setDocs(prev => [...prev.filter(d => d.doc_type !== docType), docRow]);
         setSuccessMsg(`Uploaded ${docType}`);
         return;
       } catch (clientInsertErr) {
-        console.warn("handleUploadFile: client insert failed, will fallback to server API. Error:", clientInsertErr);
-  
-        // If the error contains RLS text, fallback; otherwise rethrow
-        const errMsg = clientInsertErr?.message || "";
-        const isRls = errMsg.toLowerCase().includes("row-level") || errMsg.toLowerCase().includes("policy");
-  
-        if (!isRls) {
-          // If not RLS, still attempt server fallback (server can validate & insert), but warn
-          console.warn("handleUploadFile: client insert failed but not RLS; trying server fallback as well.");
-        }
-  
-        // 5) Fallback: call server endpoint that inserts with service role key
-        // Ensure you have created the server route /api/seller_documents (provided below).
-        const resp = await fetch("/api/seller_documents", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-            // no auth header required if you rely on cookie session; otherwise send Authorization: Bearer <access_token>
-          },
-          body: JSON.stringify({
-            seller_id: currentSeller.id,
-            doc_type,
-            storage_path: storagePath,
-            meta: { original_name: file.name, size: file.size, mime: file.type }
-          })
-        });
-  
-        if (!resp.ok) {
-          const txt = await resp.text();
-          throw new Error(`Server fallback failed: ${resp.status} ${txt}`);
-        }
-  
-        const json = await resp.json();
-        if (json?.document) {
-          setDocs(prev => [...prev.filter(d => d.doc_type !== docType), json.document]);
-          setSuccessMsg(`Uploaded ${docType} (via server)`);
-          return;
-        } else {
-          throw new Error("Server fallback did not return document");
-        }
+        console.warn("handleUploadFile: client insert failed, falling back to server. Error:", clientInsertErr);
+        // continue to fallback
       }
+  
+      // 5) FALLBACK: call server endpoint to insert metadata using service role
+      // The server route verifies the caller using their access token (passed below).
+      const accessToken = (await supabase.auth.getSession()).data?.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Missing access token for server fallback (unable to verify user)");
+      }
+  
+      const resp = await fetch("/api/seller_documents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}` // server will verify token
+        },
+        body: JSON.stringify({
+          seller_id: currentSeller.id,
+          doc_type,
+          storage_path: storagePath,
+          meta: { original_name: file.name, size: file.size, mime: file.type }
+        })
+      });
+  
+      const bodyText = await resp.text();
+      let json;
+      try { json = JSON.parse(bodyText); } catch(e) { json = null; }
+  
+      console.log("handleUploadFile: server fallback response", resp.status, json ?? bodyText);
+  
+      if (!resp.ok) {
+        throw new Error(`Server fallback failed: ${resp.status} ${bodyText}`);
+      }
+  
+      if (!json?.document) {
+        // server returned ok but no document row — handle as error
+        throw new Error("Server fallback did not return document row");
+      }
+  
+      setDocs(prev => [...prev.filter(d => d.doc_type !== docType), json.document]);
+      setSuccessMsg(`Uploaded ${docType} (via server fallback)`);
     } catch (err) {
       console.error("handleUploadFile error", err);
       setError(err.message || "Upload failed");
@@ -357,9 +353,6 @@ export default function SellerOnboardingForm() {
     }
   }
   
-  
-  
-
   if (loadingUser) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">
