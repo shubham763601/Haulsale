@@ -112,6 +112,7 @@ export default function SellerOnboardingForm() {
 
   const updateForm = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Replace your existing saveDraft() with this
   async function saveDraft() {
     setSaving(true);
     setError(null);
@@ -121,15 +122,29 @@ export default function SellerOnboardingForm() {
       if (!user) throw new Error("Not authenticated");
       if (!form.business_name) throw new Error("Business name is required");
   
+      // Prepare payload to match your sellers table columns exactly
       const payload = {
-        ...form,
         user_id: user.id,
+        business_name: form.business_name,
+        contact_name: form.contact_name || null,
+        contact_phone: form.contact_phone || null,
+        contact_email: form.contact_email || null,
+        gstin: form.gstin || null,
+        address_line1: form.address_line1 || null,
+        address_line2: form.address_line2 || null,
+        city: form.city || null,
+        state: form.state || null,
+        pincode: form.pincode || null,
+        country: form.country || "India",
+        about: form.about || null,
+        logo_path: form.logo_path || null,
+        meta: form.meta || {},
         seller_status: "draft",
         updated_at: new Date().toISOString()
       };
   
       if (seller?.id) {
-        // update existing
+        // update existing seller
         const { data, error } = await supabase
           .from("sellers")
           .update(payload)
@@ -142,7 +157,7 @@ export default function SellerOnboardingForm() {
         setSuccessMsg("Draft updated");
         return data;
       } else {
-        // insert new
+        // insert new seller row
         const { data, error } = await supabase
           .from("sellers")
           .insert(payload)
@@ -162,8 +177,10 @@ export default function SellerOnboardingForm() {
       setSaving(false);
     }
   }
+  
 
 
+  // Replace your existing submitForReview() with this
   async function submitForReview() {
     setSaving(true);
     setError(null);
@@ -172,17 +189,16 @@ export default function SellerOnboardingForm() {
     try {
       if (!user) throw new Error("Not authenticated");
   
-      // Ensure seller exists and get a valid id
+      // Ensure a seller row exists: create draft if needed and return created row
       let currentSeller = seller;
       if (!currentSeller?.id) {
-        // create or update draft and get result
         currentSeller = await saveDraft();
         if (!currentSeller?.id) {
           throw new Error("Unable to create seller record before submission");
         }
       }
   
-      // Double-check by fetching by user_id (defensive)
+      // (Defensive) re-fetch by user_id to be sure we have authoritative row
       const { data: fetched, error: fetchErr } = await supabase
         .from("sellers")
         .select("*")
@@ -190,16 +206,13 @@ export default function SellerOnboardingForm() {
         .limit(1)
         .maybeSingle();
   
-      if (fetchErr) {
-        console.warn("Warning - could not fetch seller after save:", fetchErr);
-      }
-      if (fetched && fetched.id) currentSeller = fetched;
+      if (!fetchErr && fetched && fetched.id) currentSeller = fetched;
   
       if (!currentSeller?.id) {
         throw new Error("Seller id missing - cannot submit");
       }
   
-      // Now update status safely
+      // Update seller_status -> submitted (use id that is guaranteed to be UUID)
       const { data, error } = await supabase
         .from("sellers")
         .update({
@@ -221,8 +234,9 @@ export default function SellerOnboardingForm() {
       setSaving(false);
     }
   }
+  
 
-
+  // Replace your existing handleUploadFile() with this
   async function handleUploadFile(file, docType) {
     setUploading(true);
     setError(null);
@@ -235,33 +249,35 @@ export default function SellerOnboardingForm() {
       let currentSeller = seller;
       if (!currentSeller?.id) {
         currentSeller = await saveDraft();
-        if (!currentSeller?.id) throw new Error("Create seller draft first before uploading documents");
+        if (!currentSeller?.id) {
+          throw new Error("Create seller draft first before uploading documents");
+        }
       }
   
+      // Build storage path using the guaranteed seller id
       const filename = `${Date.now()}_${file.name.replace(/\s/g, "_")}`;
       const path = `${currentSeller.id}/${filename}`;
   
-      // Attempt upload
       const { data: uploadData, error: uploadErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { cacheControl: "3600", upsert: false });
   
       if (uploadErr) {
-        // Nice error message if bucket doesn't exist
+        // Provide useful message for bucket or permission errors
         if (uploadErr.message && uploadErr.message.toLowerCase().includes("bucket")) {
-          throw new Error(`Storage error: ${uploadErr.message}. Did you create the storage bucket "${BUCKET}"?`);
+          throw new Error(`Storage error: ${uploadErr.message}. Check bucket "${BUCKET}" exists and is accessible.`);
         }
         throw uploadErr;
       }
   
       const storagePath = uploadData.path;
   
-      // Insert metadata row in seller_documents
+      // Insert seller_documents metadata (this will be allowed by RLS if seller.user_id == auth.uid())
       const { data: docRow, error: docErr } = await supabase
         .from("seller_documents")
         .insert({
           seller_id: currentSeller.id,
-          doc_type: docType,
+          doc_type,
           storage_path: storagePath,
           meta: {
             original_name: file.name,
@@ -283,6 +299,7 @@ export default function SellerOnboardingForm() {
       setUploading(false);
     }
   }
+  
   
 
   if (loadingUser) {
