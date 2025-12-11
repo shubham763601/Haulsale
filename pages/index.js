@@ -42,7 +42,7 @@ export default function HomePage({ categories, featuredProducts, dealProducts })
                     Create a seller account and list your wholesale catalogue.
                   </p>
                   <a
-                    href="/seller"
+                    href="/become-seller"
                     className="mt-3 inline-flex items-center justify-center rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-amber-400"
                   >
                     Become a seller
