@@ -3,27 +3,28 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 
-const BUCKET = "seller-kyc";
+/**
+ * SellerOnboardingForm.jsx
+ *
+ * - Ensures seller row exists before uploads or submit
+ * - Uploads file to Supabase Storage then calls server endpoint to insert metadata (service role)
+ * - Logs useful debug info to console
+ *
+ * IMPORTANT:
+ * - Set the BUCKET constant to the storage bucket name that exists in your Supabase project.
+ * - Create server route pages/api/seller_documents.js (I recommended earlier) and set SUPABASE_SERVICE_ROLE_KEY env on Vercel.
+ */
 
-function StepHeader({ step, title, subtitle }) {
-  return (
-    <div className="mb-4">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">
-        Step {step}
-      </div>
-      <div className="mt-1 text-lg font-semibold text-slate-900">{title}</div>
-      {subtitle && (
-        <div className="mt-1 text-xs text-slate-500">{subtitle}</div>
-      )}
-    </div>
-  );
-}
+const BUCKET = "seller-kyc"; // <- CHANGE to your actual bucket name (case-sensitive)
 
 export default function SellerOnboardingForm() {
   const router = useRouter();
+
+  // auth & user
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
+  // seller row & form
   const [seller, setSeller] = useState(null);
   const [form, setForm] = useState({
     user_id: null,
@@ -43,6 +44,7 @@ export default function SellerOnboardingForm() {
     meta: {}
   });
 
+  // UI state
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -50,79 +52,79 @@ export default function SellerOnboardingForm() {
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // ✅ Correct way to get the logged-in user in Supabase JS v2
+  // ---------- fetch current user and seller on mount ----------
   useEffect(() => {
     (async () => {
       setLoadingUser(true);
+      try {
+        const { data, error: userErr } = await supabase.auth.getUser();
+        if (userErr) console.warn("getUser error", userErr);
+        const currentUser = data?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          // set user_id in form
+          setForm((f) => ({ ...f, user_id: currentUser.id }));
 
-      const { data, error } = await supabase.auth.getUser();
-      if (error) {
-        console.error("getUser error", error);
-      }
-      const currentUser = data?.user ?? null;
-      setUser(currentUser);
-      setLoadingUser(false);
-
-      if (currentUser) {
-        setForm((f) => ({ ...f, user_id: currentUser.id }));
-
-        // fetch existing seller row for this user_id
-        const { data: sellerRow, error: sellerErr } = await supabase
-          .from("sellers")
-          .select("*")
-          .eq("user_id", currentUser.id)
-          .limit(1)
-          .maybeSingle();
-
-        if (sellerErr) {
-          console.error("fetch seller error", sellerErr);
-        }
-
-        if (sellerRow) {
-          setSeller(sellerRow);
-          setForm({
-            user_id: sellerRow.user_id,
-            business_name: sellerRow.business_name || "",
-            contact_name: sellerRow.contact_name || "",
-            contact_phone: sellerRow.contact_phone || "",
-            contact_email: sellerRow.contact_email || "",
-            gstin: sellerRow.gstin || "",
-            address_line1: sellerRow.address_line1 || "",
-            address_line2: sellerRow.address_line2 || "",
-            city: sellerRow.city || "",
-            state: sellerRow.state || "",
-            pincode: sellerRow.pincode || "",
-            country: sellerRow.country || "India",
-            about: sellerRow.about || "",
-            logo_path: sellerRow.logo_path || null,
-            meta: sellerRow.meta || {}
-          });
-
-          const { data: docsList, error: docsErr } = await supabase
-            .from("seller_documents")
+          // fetch seller for this user
+          const { data: sellerRow, error: sellerErr } = await supabase
+            .from("sellers")
             .select("*")
-            .eq("seller_id", sellerRow.id);
+            .eq("user_id", currentUser.id)
+            .limit(1)
+            .maybeSingle();
 
-          if (docsErr) console.error("docs error", docsErr);
-          if (docsList) setDocs(docsList);
+          if (sellerErr) {
+            console.error("fetch seller error", sellerErr);
+          } else if (sellerRow) {
+            setSeller(sellerRow);
+            setForm({
+              user_id: sellerRow.user_id,
+              business_name: sellerRow.business_name || "",
+              contact_name: sellerRow.contact_name || "",
+              contact_phone: sellerRow.contact_phone || "",
+              contact_email: sellerRow.contact_email || currentUser.email || "",
+              gstin: sellerRow.gstin || "",
+              address_line1: sellerRow.address_line1 || "",
+              address_line2: sellerRow.address_line2 || "",
+              city: sellerRow.city || "",
+              state: sellerRow.state || "",
+              pincode: sellerRow.pincode || "",
+              country: sellerRow.country || "India",
+              about: sellerRow.about || "",
+              logo_path: sellerRow.logo_path || null,
+              meta: sellerRow.meta || {}
+            });
+
+            // fetch docs if any
+            const { data: docsList, error: docsErr } = await supabase
+              .from("seller_documents")
+              .select("*")
+              .eq("seller_id", sellerRow.id);
+
+            if (docsErr) console.error("docs fetch error", docsErr);
+            if (docsList) setDocs(docsList);
+          }
         }
+      } catch (err) {
+        console.error("init error", err);
+      } finally {
+        setLoadingUser(false);
       }
     })();
   }, []);
 
+  // ---------- helpers ----------
   const updateForm = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Replace your existing saveDraft() with this
+  // saveDraft: create or update seller row and RETURN the created/updated row
   async function saveDraft() {
     setSaving(true);
     setError(null);
     setSuccessMsg(null);
-  
     try {
       if (!user) throw new Error("Not authenticated");
       if (!form.business_name) throw new Error("Business name is required");
-  
-      // Prepare payload to match your sellers table columns exactly
+
       const payload = {
         user_id: user.id,
         business_name: form.business_name,
@@ -142,28 +144,24 @@ export default function SellerOnboardingForm() {
         seller_status: "draft",
         updated_at: new Date().toISOString()
       };
-  
+
       if (seller?.id) {
-        // update existing seller
         const { data, error } = await supabase
           .from("sellers")
           .update(payload)
           .eq("id", seller.id)
           .select()
           .maybeSingle();
-  
         if (error) throw error;
         setSeller(data);
         setSuccessMsg("Draft updated");
         return data;
       } else {
-        // insert new seller row
         const { data, error } = await supabase
           .from("sellers")
           .insert(payload)
           .select()
           .maybeSingle();
-  
         if (error) throw error;
         setSeller(data);
         setSuccessMsg("Draft saved");
@@ -177,19 +175,15 @@ export default function SellerOnboardingForm() {
       setSaving(false);
     }
   }
-  
 
-
-  // Replace your existing submitForReview() with this
+  // submitForReview - ensure seller exists then update status -> submitted
   async function submitForReview() {
     setSaving(true);
     setError(null);
     setSuccessMsg(null);
-  
     try {
       if (!user) throw new Error("Not authenticated");
-  
-      // Ensure a seller row exists: create draft if needed and return created row
+
       let currentSeller = seller;
       if (!currentSeller?.id) {
         currentSeller = await saveDraft();
@@ -197,22 +191,18 @@ export default function SellerOnboardingForm() {
           throw new Error("Unable to create seller record before submission");
         }
       }
-  
-      // (Defensive) re-fetch by user_id to be sure we have authoritative row
+
+      // defensive fetch
       const { data: fetched, error: fetchErr } = await supabase
         .from("sellers")
         .select("*")
         .eq("user_id", user.id)
         .limit(1)
         .maybeSingle();
-  
       if (!fetchErr && fetched && fetched.id) currentSeller = fetched;
-  
-      if (!currentSeller?.id) {
-        throw new Error("Seller id missing - cannot submit");
-      }
-  
-      // Update seller_status -> submitted (use id that is guaranteed to be UUID)
+
+      if (!currentSeller?.id) throw new Error("Seller id missing - cannot submit");
+
       const { data, error } = await supabase
         .from("sellers")
         .update({
@@ -222,7 +212,7 @@ export default function SellerOnboardingForm() {
         .eq("id", currentSeller.id)
         .select()
         .maybeSingle();
-  
+
       if (error) throw error;
       setSeller(data);
       setSuccessMsg("Submitted for review");
@@ -234,91 +224,60 @@ export default function SellerOnboardingForm() {
       setSaving(false);
     }
   }
-  
 
-
-    // inside your component - replace existing handleUploadFile
+  // handleUploadFile: ALWAYS ensure seller exists, upload to storage, then call server route to insert metadata
   async function handleUploadFile(file, docType) {
     setUploading(true);
     setError(null);
     setSuccessMsg(null);
-  
+
     try {
-      // 1) confirm user session
+      // 1) ensure user session
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       const currentUser = userData?.user ?? null;
       console.log("handleUploadFile: supabase user:", currentUser);
       if (userErr || !currentUser) throw new Error("Not authenticated (no session)");
-  
+
       // 2) ensure seller exists
       let currentSeller = seller;
       if (!currentSeller?.id) {
-        console.log("handleUploadFile: creating draft seller before upload...");
+        console.log("handleUploadFile: seller missing, creating draft first...");
         currentSeller = await saveDraft();
-        if (!currentSeller?.id) throw new Error("Cannot create seller before uploading documents");
+        if (!currentSeller?.id) throw new Error("Unable to create seller row before upload");
         setSeller(currentSeller);
       }
       console.log("handleUploadFile: using seller:", currentSeller.id);
-  
+
       // 3) upload to storage
       const filename = `${Date.now()}_${file.name.replace(/\s/g, "_")}`;
       const path = `${currentSeller.id}/${filename}`;
-      console.log("handleUploadFile: uploading to:", path, "bucket:", BUCKET);
-  
+      console.log("handleUploadFile: uploading to path:", path, "bucket:", BUCKET);
+
       const { data: uploadData, error: uploadErr } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { cacheControl: "3600", upsert: false });
-  
-      // log full responses so we can inspect server output
+
       console.log("handleUploadFile: uploadData:", uploadData);
       console.log("handleUploadFile: uploadErr:", uploadErr);
-  
-      if (uploadErr || !uploadData) {
-        // log and surface the upload error message (inspect uploadErr)
-        const msg = uploadErr?.message || JSON.stringify(uploadErr) || "Upload failed (no data)";
+
+      if (!uploadData || uploadErr) {
+        const msg = uploadErr?.message || JSON.stringify(uploadErr) || "Upload failed";
         throw new Error(`Storage upload error: ${msg}`);
       }
-  
+
       const storagePath = uploadData.path;
       console.log("handleUploadFile: storagePath:", storagePath);
-  
-      // 4) try client-side insert into seller_documents (fast path)
-      try {
-        const { data: docRow, error: docErr } = await supabase
-          .from("seller_documents")
-          .insert({
-            seller_id: currentSeller.id,
-            doc_type,
-            storage_path: storagePath,
-            meta: { original_name: file.name, size: file.size, mime: file.type }
-          })
-          .select()
-          .maybeSingle();
-  
-        console.log("handleUploadFile: client insert result:", { docRow, docErr });
-  
-        if (docErr) throw docErr;
-  
-        setDocs(prev => [...prev.filter(d => d.doc_type !== docType), docRow]);
-        setSuccessMsg(`Uploaded ${docType}`);
-        return;
-      } catch (clientInsertErr) {
-        console.warn("handleUploadFile: client insert failed, falling back to server. Error:", clientInsertErr);
-        // continue to fallback
-      }
-  
-      // 5) FALLBACK: call server endpoint to insert metadata using service role
-      // The server route verifies the caller using their access token (passed below).
-      const accessToken = (await supabase.auth.getSession()).data?.session?.access_token;
-      if (!accessToken) {
-        throw new Error("Missing access token for server fallback (unable to verify user)");
-      }
-  
+
+      // 4) Call server endpoint to insert seller_documents using service role (server validates caller)
+      const sessionResp = await supabase.auth.getSession();
+      const accessToken = sessionResp?.data?.session?.access_token;
+      if (!accessToken) throw new Error("Missing access token for server verification");
+
       const resp = await fetch("/api/seller_documents", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}` // server will verify token
+          Authorization: `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           seller_id: currentSeller.id,
@@ -327,24 +286,18 @@ export default function SellerOnboardingForm() {
           meta: { original_name: file.name, size: file.size, mime: file.type }
         })
       });
-  
-      const bodyText = await resp.text();
+
+      const respText = await resp.text();
       let json;
-      try { json = JSON.parse(bodyText); } catch(e) { json = null; }
-  
-      console.log("handleUploadFile: server fallback response", resp.status, json ?? bodyText);
-  
-      if (!resp.ok) {
-        throw new Error(`Server fallback failed: ${resp.status} ${bodyText}`);
-      }
-  
-      if (!json?.document) {
-        // server returned ok but no document row — handle as error
-        throw new Error("Server fallback did not return document row");
-      }
-  
-      setDocs(prev => [...prev.filter(d => d.doc_type !== docType), json.document]);
-      setSuccessMsg(`Uploaded ${docType} (via server fallback)`);
+      try { json = JSON.parse(respText); } catch (e) { json = null; }
+
+      console.log("handleUploadFile: server fallback response", resp.status, json || respText);
+
+      if (!resp.ok) throw new Error(`Server insert failed: ${resp.status} ${respText}`);
+      if (!json?.document) throw new Error("Server did not return inserted document");
+
+      setDocs((prev) => [...prev.filter((d) => d.doc_type !== docType), json.document]);
+      setSuccessMsg(`Uploaded ${docType}`);
     } catch (err) {
       console.error("handleUploadFile error", err);
       setError(err.message || "Upload failed");
@@ -352,26 +305,28 @@ export default function SellerOnboardingForm() {
       setUploading(false);
     }
   }
-  
-  if (loadingUser) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center text-sm text-slate-500">
-        Loading seller onboarding…
-      </div>
-    );
+
+  // goToStep helper: auto-save before entering step 3 (KYC)
+  async function goToStep(next) {
+    if (next === 3 && !seller?.id) {
+      await saveDraft();
+    }
+    setStep(next);
   }
 
-  // 🔁 You already have auth + redirect; but just in case:
+  // --------------- UI ---------------
+  if (loadingUser) {
+    return <div className="p-8 text-sm text-slate-500">Loading seller onboarding…</div>;
+  }
+
   if (!user) {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
-        <h2 className="text-lg font-semibold text-slate-900">Become a seller</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Please sign in to continue.
-        </p>
+      <div className="mx-auto max-w-md px-4 py-12 text-center">
+        <h2 className="text-lg font-semibold">Become a seller</h2>
+        <p className="mt-2 text-sm text-slate-500">Please sign in to continue.</p>
         <button
           onClick={() => router.push("/auth/signup")}
-          className="mt-4 inline-flex items-center rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-amber-400"
+          className="mt-4 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-900"
         >
           Go to login / signup
         </button>
@@ -380,108 +335,45 @@ export default function SellerOnboardingForm() {
   }
 
   return (
-    <div className="mx-auto mt-4 max-w-5xl rounded-2xl bg-white p-5 shadow-[0_10px_40px_rgba(15,23,42,0.08)]">
-      <div className="flex flex-col gap-5 lg:flex-row">
+    <div className="mx-auto mt-6 max-w-5xl rounded-2xl bg-white p-6 shadow-md">
+      <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex-1">
+          {/* Step content */}
           {step === 1 && (
             <>
-              <StepHeader
-                step={1}
-                title="Business details"
-                subtitle="Tell us about your business."
-              />
+              <div className="mb-4">
+                <div className="text-xs text-slate-500">Step 1</div>
+                <h3 className="mt-1 text-lg font-semibold">Business details</h3>
+                <p className="mt-1 text-sm text-slate-500">Tell us about your business.</p>
+              </div>
               <div className="grid gap-3">
-                <input
-                  className={inputClass}
-                  placeholder="Business name"
-                  value={form.business_name}
-                  onChange={(e) => updateForm("business_name", e.target.value)}
-                />
-                <input
-                  className={inputClass}
-                  placeholder="Contact person"
-                  value={form.contact_name}
-                  onChange={(e) => updateForm("contact_name", e.target.value)}
-                />
-                <input
-                  className={inputClass}
-                  placeholder="Contact phone"
-                  value={form.contact_phone}
-                  onChange={(e) => updateForm("contact_phone", e.target.value)}
-                />
-                <input
-                  className={inputClass}
-                  placeholder="Contact email"
-                  value={form.contact_email}
-                  onChange={(e) => updateForm("contact_email", e.target.value)}
-                />
-                <input
-                  className={inputClass}
-                  placeholder="GSTIN (optional)"
-                  value={form.gstin}
-                  onChange={(e) => updateForm("gstin", e.target.value)}
-                />
-                <textarea
-                  className={`${inputClass} min-h-[100px]`}
-                  placeholder="Brief about your business"
-                  value={form.about}
-                  onChange={(e) => updateForm("about", e.target.value)}
-                />
+                <input className={inputClass} placeholder="Business name" value={form.business_name} onChange={(e) => updateForm("business_name", e.target.value)} />
+                <input className={inputClass} placeholder="Contact person" value={form.contact_name} onChange={(e) => updateForm("contact_name", e.target.value)} />
+                <input className={inputClass} placeholder="Contact phone" value={form.contact_phone} onChange={(e) => updateForm("contact_phone", e.target.value)} />
+                <input className={inputClass} placeholder="Contact email" value={form.contact_email} onChange={(e) => updateForm("contact_email", e.target.value)} />
+                <input className={inputClass} placeholder="GSTIN (optional)" value={form.gstin} onChange={(e) => updateForm("gstin", e.target.value)} />
+                <textarea className={`${inputClass} min-h-[100px]`} placeholder="Brief about your business" value={form.about} onChange={(e) => updateForm("about", e.target.value)} />
               </div>
             </>
           )}
 
           {step === 2 && (
             <>
-              <StepHeader
-                step={2}
-                title="Business address"
-                subtitle="Where is your business located?"
-              />
+              <div className="mb-4">
+                <div className="text-xs text-slate-500">Step 2</div>
+                <h3 className="mt-1 text-lg font-semibold">Business address</h3>
+                <p className="mt-1 text-sm text-slate-500">Where is your business located?</p>
+              </div>
               <div className="grid gap-3">
-                <input
-                  className={inputClass}
-                  placeholder="Address line 1"
-                  value={form.address_line1}
-                  onChange={(e) =>
-                    updateForm("address_line1", e.target.value)
-                  }
-                />
-                <input
-                  className={inputClass}
-                  placeholder="Address line 2"
-                  value={form.address_line2}
-                  onChange={(e) =>
-                    updateForm("address_line2", e.target.value)
-                  }
-                />
+                <input className={inputClass} placeholder="Address line 1" value={form.address_line1} onChange={(e) => updateForm("address_line1", e.target.value)} />
+                <input className={inputClass} placeholder="Address line 2" value={form.address_line2} onChange={(e) => updateForm("address_line2", e.target.value)} />
                 <div className="grid grid-cols-2 gap-3">
-                  <input
-                    className={inputClass}
-                    placeholder="City"
-                    value={form.city}
-                    onChange={(e) => updateForm("city", e.target.value)}
-                  />
-                  <input
-                    className={inputClass}
-                    placeholder="State"
-                    value={form.state}
-                    onChange={(e) => updateForm("state", e.target.value)}
-                  />
+                  <input className={inputClass} placeholder="City" value={form.city} onChange={(e) => updateForm("city", e.target.value)} />
+                  <input className={inputClass} placeholder="State" value={form.state} onChange={(e) => updateForm("state", e.target.value)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <input
-                    className={inputClass}
-                    placeholder="Pincode"
-                    value={form.pincode}
-                    onChange={(e) => updateForm("pincode", e.target.value)}
-                  />
-                  <input
-                    className={inputClass}
-                    placeholder="Country"
-                    value={form.country}
-                    onChange={(e) => updateForm("country", e.target.value)}
-                  />
+                  <input className={inputClass} placeholder="Pincode" value={form.pincode} onChange={(e) => updateForm("pincode", e.target.value)} />
+                  <input className={inputClass} placeholder="Country" value={form.country} onChange={(e) => updateForm("country", e.target.value)} />
                 </div>
               </div>
             </>
@@ -489,92 +381,44 @@ export default function SellerOnboardingForm() {
 
           {step === 3 && (
             <>
-              <StepHeader
-                step={3}
-                title="Verification documents"
-                subtitle="Upload GST, PAN and bank proof."
-              />
+              <div className="mb-4">
+                <div className="text-xs text-slate-500">Step 3</div>
+                <h3 className="mt-1 text-lg font-semibold">Verification documents</h3>
+                <p className="mt-1 text-sm text-slate-500">Upload GST, PAN and bank proof.</p>
+              </div>
+
               <div className="grid gap-4">
-                <FileUpload
-                  label="GST certificate"
-                  docType="gst_photo"
-                  onUpload={handleUploadFile}
-                  existing={docs.find((d) => d.doc_type === "gst_photo")}
-                />
-                <FileUpload
-                  label="PAN card"
-                  docType="pan"
-                  onUpload={handleUploadFile}
-                  existing={docs.find((d) => d.doc_type === "pan")}
-                />
-                <FileUpload
-                  label="Cancelled cheque / bank proof"
-                  docType="bank_cancelled"
-                  onUpload={handleUploadFile}
-                  existing={docs.find((d) => d.doc_type === "bank_cancelled")}
-                />
-                <p className="text-xs text-slate-500">
-                  Files are stored securely. Only Haullcell team can see them
-                  for verification.
-                </p>
+                <FileUpload label="GST certificate" docType="gst_photo" onUpload={handleUploadFile} existing={docs.find(d => d.doc_type === "gst_photo")} disabled={uploading || saving}/>
+                <FileUpload label="PAN card" docType="pan" onUpload={handleUploadFile} existing={docs.find(d => d.doc_type === "pan")} disabled={uploading || saving}/>
+                <FileUpload label="Cancelled cheque / bank proof" docType="bank_cancelled" onUpload={handleUploadFile} existing={docs.find(d => d.doc_type === "bank_cancelled")} disabled={uploading || saving} />
+                <p className="text-xs text-slate-500">Files are stored securely. Only Haullcell team can see them for verification.</p>
               </div>
             </>
           )}
 
           {step === 4 && (
             <>
-              <StepHeader
-                step={4}
-                title="Review & submit"
-                subtitle="Confirm your details before sending for approval."
-              />
+              <div className="mb-4">
+                <div className="text-xs text-slate-500">Step 4</div>
+                <h3 className="mt-1 text-lg font-semibold">Review & submit</h3>
+                <p className="mt-1 text-sm text-slate-500">Confirm your details before sending for approval.</p>
+              </div>
               <div className="grid gap-3 text-sm">
-                <SummaryRow
-                  label="Business"
-                  value={form.business_name || "—"}
-                />
-                <SummaryRow
-                  label="Contact"
-                  value={`${form.contact_name || "—"} • ${
-                    form.contact_phone || "—"
-                  }`}
-                />
-                <SummaryRow
-                  label="Email"
-                  value={form.contact_email || user.email || "—"}
-                />
-                <SummaryRow
-                  label="GSTIN"
-                  value={form.gstin || "—"}
-                />
-                <SummaryRow
-                  label="Address"
-                  value={`${form.address_line1 || ""} ${
-                    form.address_line2 || ""
-                  }, ${form.city || ""}, ${form.state || ""} ${
-                    form.pincode || ""
-                  }`}
-                />
+                <SummaryRow label="Business" value={form.business_name || "—"} />
+                <SummaryRow label="Contact" value={`${form.contact_name || "—"} • ${form.contact_phone || "—"}`} />
+                <SummaryRow label="Email" value={form.contact_email || user.email || "—"} />
+                <SummaryRow label="GSTIN" value={form.gstin || "—"} />
+                <SummaryRow label="Address" value={`${form.address_line1 || ""} ${form.address_line2 || ""}, ${form.city || ""}, ${form.state || ""} ${form.pincode || ""}`} />
                 <div>
-                  <div className="mb-1 text-xs font-semibold text-slate-600">
-                    Documents
-                  </div>
-                  {docs.length === 0 && (
-                    <div className="text-xs text-slate-500">
-                      No documents uploaded yet.
-                    </div>
-                  )}
-                  {docs.map((d) => (
-                    <div
-                      key={d.id}
-                      className="mt-1 flex items-center justify-between rounded-md border border-slate-200 px-2 py-1 text-xs"
-                    >
+                  <div className="mb-1 text-xs font-semibold text-slate-600">Documents</div>
+                  {docs.length === 0 && <div className="text-xs text-slate-500">No documents uploaded yet.</div>}
+                  {docs.map(d => (
+                    <div key={d.id} className="mt-1 flex items-center justify-between rounded-md border border-slate-200 px-2 py-1 text-xs">
                       <div>
                         <div className="font-medium">{d.doc_type}</div>
-                        <div className="text-[11px] text-slate-500">
-                          {d.meta?.original_name || d.storage_path}
-                        </div>
+                        <div className="text-[11px] text-slate-500">{d.meta?.original_name || d.storage_path}</div>
                       </div>
+                      <a className="text-xs text-indigo-600" href="#" onClick={async (e) => { e.preventDefault(); const s = await supabase.storage.from(BUCKET).createSignedUrl(d.storage_path, 60*60); if (s?.data?.signedUrl) window.open(s.data.signedUrl, "_blank"); }}>Preview</a>
                     </div>
                   ))}
                 </div>
@@ -583,80 +427,29 @@ export default function SellerOnboardingForm() {
           )}
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={() => setStep((s) => s - 1)}
-                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700"
-              >
-                Back
-              </button>
-            )}
-            {step < 4 && (
-              <button
-                type="button"
-                onClick={() => setStep((s) => s + 1)}
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-              >
-                Continue
-              </button>
-            )}
-            {step < 4 && (
-              <button
-                type="button"
-                onClick={saveDraft}
-                disabled={saving}
-                className="rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
-              >
-                {saving ? "Saving…" : "Save draft"}
-              </button>
-            )}
-            {step === 4 && (
-              <button
-                type="button"
-                onClick={submitForReview}
-                disabled={saving}
-                className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-amber-400"
-              >
-                {saving ? "Submitting…" : "Submit for approval"}
-              </button>
-            )}
+            {step > 1 && <button disabled={saving || uploading} onClick={() => setStep(s => s - 1)} className="rounded-md border border-slate-200 px-3 py-1.5 text-xs">Back</button>}
+            {step < 4 && <button disabled={saving || uploading} onClick={() => goToStep(step + 1)} className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">Continue</button>}
+            {step < 4 && <button disabled={saving || uploading} onClick={saveDraft} className="rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-xs">{saving ? "Saving…" : "Save draft"}</button>}
+            {step === 4 && <button disabled={saving || uploading} onClick={submitForReview} className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold">{saving ? "Submitting…" : "Submit for approval"}</button>}
           </div>
 
-          {error && (
-            <div className="mt-3 text-xs text-red-600">
-              {error}
-            </div>
-          )}
-          {successMsg && (
-            <div className="mt-3 text-xs text-emerald-700">
-              {successMsg}
-            </div>
-          )}
+          {error && <div className="mt-3 text-xs text-red-600">{error}</div>}
+          {successMsg && <div className="mt-3 text-xs text-emerald-700">{successMsg}</div>}
         </div>
 
-        <div className="w-full rounded-xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-700 lg:w-80">
-          <div className="text-[13px] font-semibold text-slate-800">
-            Onboarding progress
-          </div>
+        <aside className="w-full rounded-xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-700 lg:w-80">
+          <div className="text-[13px] font-semibold text-slate-800">Onboarding progress</div>
           <ProgressIndicator step={step} />
-          <div className="mt-3 text-[13px]">
-            <span className="font-semibold">Status: </span>
-            {seller ? seller.seller_status : "Not created yet"}
-          </div>
-          {seller?.status_note && (
-            <div className="mt-1 text-[11px] text-slate-500">
-              Note: {seller.status_note}
-            </div>
-          )}
-        </div>
+          <div className="mt-3 text-[13px]"><span className="font-semibold">Status:</span> {seller ? seller.seller_status : "Not created yet"}</div>
+          {seller?.status_note && <div className="mt-1 text-[11px] text-slate-500">Note: {seller.status_note}</div>}
+        </aside>
       </div>
     </div>
   );
 }
 
-const inputClass =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-slate-400 focus:ring-0";
+/* small components & styles */
+const inputClass = "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400 focus:ring-0";
 
 function ProgressIndicator({ step }) {
   const steps = [
@@ -667,29 +460,15 @@ function ProgressIndicator({ step }) {
   ];
   return (
     <div className="mt-2 space-y-2">
-      {steps.map((s) => (
+      {steps.map(s => (
         <div key={s.id} className="flex items-center gap-2">
-          <div
-            className={
-              "flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-semibold " +
-              (s.id <= step
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-200 bg-white text-slate-400")
-            }
-          >
-            {s.id}
-          </div>
+          <div className={
+            "flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-semibold " +
+            (s.id <= step ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-400")
+          }>{s.id}</div>
           <div>
-            <div className="text-[12px] font-semibold text-slate-800">
-              {s.title}
-            </div>
-            <div className="text-[11px] text-slate-400">
-              {s.id < step
-                ? "Completed"
-                : s.id === step
-                ? "Current"
-                : "Pending"}
-            </div>
+            <div className="text-[12px] font-semibold text-slate-800">{s.title}</div>
+            <div className="text-[11px] text-slate-400">{s.id < step ? "Completed" : s.id === step ? "Current" : "Pending"}</div>
           </div>
         </div>
       ))}
@@ -697,22 +476,22 @@ function ProgressIndicator({ step }) {
   );
 }
 
-function FileUpload({ label, docType, onUpload, existing }) {
+function FileUpload({ label, docType, onUpload, existing, disabled }) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">
         <span className="font-semibold text-slate-700">{label}</span>
-        <span className="text-[11px] text-slate-500">
-          {existing ? "Uploaded" : "Not uploaded"}
-        </span>
+        <span className="text-[11px] text-slate-500">{existing ? "Uploaded" : "Not uploaded"}</span>
       </div>
       <input
+        disabled={disabled}
         type="file"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) onUpload(file, docType);
+          if (!file) return;
+          onUpload(file, docType);
         }}
-        className="block w-full text-[11px] text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-slate-800"
+        className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-slate-800"
       />
     </div>
   );
@@ -720,11 +499,9 @@ function FileUpload({ label, docType, onUpload, existing }) {
 
 function SummaryRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2 text-xs">
+    <div className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2 text-sm">
       <div className="text-slate-500">{label}</div>
-      <div className="max-w-[60%] text-right font-semibold text-slate-800">
-        {value || "—"}
-      </div>
+      <div className="max-w-[60%] text-right font-semibold text-slate-800">{value || "—"}</div>
     </div>
   );
 }
