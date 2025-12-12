@@ -64,6 +64,8 @@
 
 /* Custom CSS variables */
 :root {
+  --brand-700: #0f2a78;
+  --brand-500: #4f46e5;
   --brand-1: #0f2a78; /* deep indigo */
   --brand-2: #4f46e5; /* violet */
   --accent: #f59e0b;  /* amber */
@@ -89,4 +91,10 @@
 :focus {
   outline: 2px solid rgba(79,70,229,0.12);
   outline-offset: 2px;
+}
+
+
+/* small helper to ensure gradient text contrast is fine */
+.bg-gradient-to-b.from-brand-700 {
+  background: linear-gradient(180deg, var(--brand-700) 0%, var(--brand-500) 100%);
 }
