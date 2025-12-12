@@ -243,15 +243,20 @@ export async function getServerSideProps(ctx) {
     id, title, price, mrp, rating, rating_count, description,
     category_id,
     product_variants ( price, stock ),
-    product_images ( storage_path )
+    product_images ( storage_path ),
+    seller_id,
+    is_active,
+    approved
   `;
 
-  // Main product
+  // Main product: only show to public if approved & active
   const { data: product, error: prodErr } = await supabase
     .from("products")
     .select(query)
     .eq("id", productId)
-    .single();
+    .eq("approved", true)
+    .eq("is_active", true)
+    .maybeSingle();
 
   if (prodErr || !product) {
     console.error("product detail error", prodErr);
@@ -273,18 +278,21 @@ export async function getServerSideProps(ctx) {
     rating_count: product.rating_count ?? 0,
     imagePath: firstImage?.storage_path ?? null,
     imageUrl: makePublicUrl(firstImage?.storage_path ?? null),
+    seller_id: product.seller_id ?? null,
   };
 
-  // Similar products in same category
+  // Similar products in same category (public only)
   const { data: similar, error: simErr } = await supabase
-    .from("products")
+    .from('products')
     .select(query)
-    .eq("category_id", product.category_id)
-    .neq("id", productId)
+    .eq('category_id', product.category_id)
+    .neq('id', productId)
+    .eq('approved', true)
+    .eq('is_active', true)
     .limit(10);
 
   if (simErr) {
-    console.error("similar products error", simErr);
+    console.error('similar products error', simErr);
   }
 
   const similarProducts =
@@ -305,7 +313,7 @@ export async function getServerSideProps(ctx) {
       };
     }) ?? [];
 
-  // Reviews (note: RLS must allow reading them!)
+  // Reviews (public)
   const { data: reviews, error: reviewsErr } = await supabase
     .from("reviews")
     .select("id, rating, comment, created_at")

@@ -130,15 +130,20 @@ export async function getServerSideProps() {
     product_images ( storage_path )
   `
 
+  // only show approved & active products on public homepage
   const { data: featured } = await supabase
     .from('products')
     .select(productSelect)
+    .eq('approved', true)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(15)
 
   const { data: deals } = await supabase
     .from('products')
     .select(productSelect)
+    .eq('approved', true)
+    .eq('is_active', true)
     .order('price', { ascending: true })
     .limit(15)
 
