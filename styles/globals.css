@@ -1,42 +1,19 @@
-/* styles/global.css — Tailwind + improved custom UI system */
+/* styles/global.css  — Tailwind + custom utilities */
 
-/* ---------------- Tailwind layers (required) ---------------- */
+/* Tailwind layers */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ---------------- CSS Variables / Theme tokens ---------------- */
-:root{
-  /* primary brand */
-  --brand-900: #07123a;
-  --brand-700: #0f2a78; /* deep indigo */
-  --brand-500: #4f46e5; /* violet */
-
-  /* seller gradient (used in sidebar) */
-  --seller-700: #6d28d9; /* top */
-  --seller-500: #4f46e5; /* bottom */
-
-  /* accent / CTA */
-  --accent-amber: #f59e0b;
-
-  /* muted / text */
-  --muted: #94a3b8;
-  --muted-2: #64748b;
-
-  /* surfaces */
-  --bg: #f8fafc; /* slate-50 */
-  --card: #ffffff;
-
-  /* motion */
-  --ease: cubic-bezier(.16,.84,.3,1);
-}
-
-/* ---------------- Base styles ---------------- */
+/* -------------------------
+   Base styles
+   ------------------------- */
 @layer base {
   html, body {
     @apply bg-slate-50 text-slate-900 antialiased;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    background-color: var(--bg);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   main {
@@ -47,186 +24,229 @@
     @apply text-indigo-600 hover:text-indigo-700;
   }
 
-  /* improved focus for accessibility */
-  :focus {
-    outline: none;
-    box-shadow: 0 0 0 4px rgba(79,70,229,0.08);
-    border-radius: 6px;
+  /* reset link underline behavior for buttons/links inside UI */
+  button, a.button-like {
+    text-decoration: none;
   }
-
-  /* small reset for images */
-  img { max-width: 100%; height: auto; display: block; }
 }
 
-/* ---------------- Reusable components (Tailwind + custom) ---------------- */
+/* -------------------------
+   CSS Variables (theme)
+   ------------------------- */
+:root {
+  --brand-deep: #0f2a78;   /* deep indigo */
+  --brand-violet: #4f46e5; /* violet */
+  --accent-amber: #f59e0b; /* amber for CTAs */
+  --seller-700: #0b3aa6;   /* seller gradient start (tuned) */
+  --seller-500: #5b4fe6;   /* seller gradient end (tuned) */
+  --muted: #64748b;
+  --card-bg: #ffffff;
+  --bg-app: #f8fafc; /* subtle app background */
+}
+
+/* -------------------------
+   Reusable components (Tailwind @layer components)
+   ------------------------- */
 @layer components {
-  /* Primary CTA */
   .btn-primary {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-lg
-           text-sm font-semibold shadow-sm transition-transform;
-    background: linear-gradient(90deg, var(--brand-700), var(--brand-500));
-    color: white;
-    transform-origin: center;
+           bg-indigo-600 text-white text-sm font-semibold shadow-sm
+           hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
   }
-  .btn-primary:hover { transform: translateY(-1px); }
 
-  /* Secondary button */
   .btn-secondary {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-lg
-           border text-sm font-medium shadow-sm;
-    border-color: rgba(15,23,42,0.06);
-    background: white;
-    color: var(--brand-700);
+           border border-slate-300 bg-white text-sm font-medium text-slate-800
+           hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
   }
 
-  /* Amber CTA — used across site */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center px-3 py-1.5 rounded text-sm text-slate-700 hover:bg-slate-50;
+  }
+
+  /* amber CTA kept for backwards compatibility */
   .btn-amber {
-    @apply inline-flex items-center justify-center px-3 py-2 rounded-lg font-semibold;
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold;
     background: var(--accent-amber);
     color: #0f172a;
   }
-  .btn-amber:hover { filter: brightness(.98); transform: translateY(-1px); }
 
-  /* Card */
+  /* Card base used across UI — rounded + subtle border */
   .card {
-    background: var(--card);
-    border: 1px solid rgba(2,6,23,0.04);
-    border-radius: 12px;
-    padding: 1.25rem;
+    @apply bg-white border border-slate-200 rounded-2xl p-5;
+    background: var(--card-bg);
   }
 
+  /* Strong shadow variant when you want a feature card */
   .card-strong {
-    box-shadow: 0 8px 28px rgba(2,6,23,0.06);
+    box-shadow: 0 10px 30px rgba(2,6,23,0.06);
     border-radius: 14px;
-    background: var(--card);
-  }
-  .card-strong:hover {
-    box-shadow: 0 14px 48px rgba(2,6,23,0.10);
+    background: var(--card-bg);
   }
 
-  /* Input */
   .input {
-    @apply w-full rounded-lg border px-3 py-2 text-sm;
-    border-color: rgba(15,23,42,0.06);
-    background: white;
-    color: var(--brand-700);
-  }
-  .input:focus {
-    box-shadow: 0 6px 20px rgba(79,70,229,0.06);
-    border-color: var(--brand-500);
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm
+           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500;
   }
 
-  /* Small utilities */
   .page-shell {
     @apply max-w-6xl mx-auto px-4 py-6 sm:py-10;
   }
 
-  .product-image-placeholder {
-    @apply h-20 w-20 rounded-md bg-slate-100 flex items-center justify-center text-xs text-slate-400;
+  .icon-btn {
+    @apply inline-flex items-center justify-center rounded p-2 bg-white border border-slate-100 shadow-xs hover:shadow-sm;
   }
 }
 
-/* ---------------- Seller-specific helpers (fallback & polish) ---------------- */
+/* -------------------------
+   Seller sidebar / layout specific
+   ------------------------- */
 
-/* If Tailwind is not yet configured with seller colors, use these helpers */
-.seller-sidebar,
+/* more robust seller gradient (tuned for good contrast) */
 .bg-seller-gradient {
   background: linear-gradient(180deg, var(--seller-700) 0%, var(--seller-500) 100%);
 }
 
-/* Sidebar link styles (desktop) */
+/* dedicated seller sidebar container */
+.seller-sidebar {
+  @apply hidden md:flex md:flex-col w-72 flex-none text-white p-6;
+  background: linear-gradient(180deg, var(--seller-700), var(--seller-500));
+  box-shadow: none;
+  z-index: 10; /* ensure sidebar sits above most panels on desktop */
+  min-height: 100vh;
+}
+
+/* lighten brand text for sidebar */
+.seller-sidebar .brand-title {
+  @apply text-2xl font-extrabold tracking-tight;
+}
+.seller-sidebar .brand-sub {
+  @apply text-xs mt-1 text-white/90;
+}
+
+/* link styles in sidebar */
 .seller-nav-link {
-  @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200;
-  color: rgba(255,255,255,0.92);
+  @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition;
+  color: rgba(255,255,255,0.95);
 }
 .seller-nav-link:hover {
   background: rgba(255,255,255,0.06);
-  color: white;
 }
 .seller-nav-link--active {
-  background: rgba(255,255,255,0.12);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.10);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* mobile drawer specifics */
+.mobile-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.mobile-drawer__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  transition: opacity .22s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+.mobile-drawer[data-open="true"] .mobile-drawer__overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* mobile panel */
+.mobile-drawer__panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 280px;
+  transform: translateX(-100%);
+  transition: transform .28s ease;
+  background: linear-gradient(180deg, var(--seller-700), var(--seller-500));
   color: white;
+  z-index: 50;
+}
+.mobile-drawer[data-open="true"] .mobile-drawer__panel {
+  transform: translateX(0);
 }
 
-/* Mobile drawer overlay & transitions */
-.seller-drawer-overlay {
-  transition: opacity 220ms var(--ease);
-  background: rgba(0,0,0,0.4);
-}
-.seller-drawer {
-  transition: transform 260ms var(--ease);
-  will-change: transform;
-}
-
-/* Simple badge for product status */
-.badge {
-  @apply inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold;
-}
-.badge-draft { background: rgba(245,158,11,0.12); color: #92400e; }
-.badge-approved { background: rgba(16,185,129,0.12); color: #065f46; }
-.badge-pending { background: rgba(59,130,246,0.08); color: #1d4ed8; }
-
-/* subtle footer text in seller sidebar */
-.seller-footer {
-  color: rgba(255,255,255,0.75);
-  font-size: 12px;
+/* ensure desktop sidebar is visually solid even if overlays exist */
+@media (min-width: 768px) {
+  .seller-sidebar {
+    position: relative;
+    left: 0;
+    transform: none !important;
+    pointer-events: auto;
+  }
 }
 
-/* ---------------- Layout fixes & small utilities ---------------- */
-
-/* sticky header subtle border */
-.header-border {
-  border-bottom: 1px solid rgba(2,6,23,0.04);
-  background: white;
+/* -------------------------
+   Nav / Header tweaks
+   ------------------------- */
+.site-header {
+  @apply border-b border-slate-100 bg-white;
+  z-index: 20;
+}
+.site-header .header-buttons .btn {
+  @apply rounded-lg px-3 py-1 text-sm;
 }
 
-/* centre content area */
-.content-wrap {
-  padding: 1.5rem;
+/* small pill CTA used on admin buttons */
+.pill {
+  @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold;
+  background: rgba(79,70,229,0.06);
+  color: var(--brand-violet);
 }
 
-/* responsive helpers for mobile nav toggle */
-.mobile-nav-toggle {
-  @apply md:hidden inline-flex items-center justify-center p-2 rounded-lg border bg-white;
+/* -------------------------
+   Utilities & Helpers
+   ------------------------- */
+
+/* consistent "no image" placeholder */
+.product-image-placeholder {
+  @apply h-20 w-20 rounded-md bg-slate-100 flex items-center justify-center text-xs text-slate-400;
 }
 
-/* helper for subtle rounded shadow container used on dashboard */
-.panel {
+/* accessibility focus */
+:focus {
+  outline: 3px solid rgba(79,70,229,0.12);
+  outline-offset: 2px;
+}
+
+/* small subtle global shadow for main cards */
+.main-card-shadow {
+  box-shadow: 0 20px 40px rgba(2,6,23,0.04);
   border-radius: 12px;
-  background: white;
-  border: 1px solid rgba(2,6,23,0.04);
-  box-shadow: 0 6px 20px rgba(2,6,23,0.04);
-  padding: 1rem;
+  background: var(--card-bg);
 }
 
-/* tiny utility for small icons alignment */
-.icon-sm { width: 18px; height: 18px; display: inline-block; }
+/* -------------------------
+   Fixes for previously conflicting names
+   - avoid duplicate .card declarations causing inconsistent UI
+   ------------------------- */
 
-/* ensure forms and file inputs look neat */
-.file-input {
-  @apply mt-2;
-}
-.file-input input[type="file"] {
-  @apply text-sm;
-}
+/* If you had older duplicate rules, this set wins because it is the final file.
+   It aims to be neutral and consistent across pages. */
 
-/* ---------------- Visual polish and accessibility ---------------- */
-
-/* increased focus ring for keyboard users */
-:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 4px rgba(79,70,229,0.12);
-  border-radius: 8px;
+/* final fallback for left nav link color if any previous CSS wins */
+.seller-sidebar a, .seller-sidebar .seller-nav-link {
+  color: #fff !important;
+  text-decoration: none !important;
+  opacity: 0.98;
 }
 
-/* subtle text-muted */
-.text-muted { color: var(--muted-2); }
-
-/* small responsive tweaks */
-@media (max-width: 768px) {
-  .page-shell { padding-left: 1rem; padding-right: 1rem; }
-  .seller-sidebar { width: 18rem; }
+/* lighten text in collapsed / inactive state intentionally */
+.seller-sidebar .muted {
+  color: rgba(255,255,255,0.75);
 }
 
-/* ---------------- End of file ---------------- */
+/* -------------------------
+   Debug helpers (dev only - remove in prod if desired)
+   ------------------------- */
+body.debug-show-overlay *[data-debug-overlay] {
+  outline: 2px dashed rgba(255,0,0,0.25);
+}
