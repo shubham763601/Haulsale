@@ -64,12 +64,12 @@
 
 /* Custom CSS variables */
 :root {
-  --brand-700: #0f2a78;
-  --brand-500: #4f46e5;
+  --seller-700: #ff04c9;
+  --seller-500: #6d28d9;
   --brand-1: #0f2a78; /* deep indigo */
   --brand-2: #4f46e5; /* violet */
-  --accent: #f59e0b;  /* amber */
-  --muted: #94a3b8;
+  --accent-amber: #f59e0b;  /* amber */
+  --muted: #64748b;
 }
 
 /* amber button helper (keeps previous naming) */
@@ -94,7 +94,22 @@
 }
 
 
-/* small helper to ensure gradient text contrast is fine */
-.bg-gradient-to-b.from-brand-700 {
-  background: linear-gradient(180deg, var(--brand-700) 0%, var(--brand-500) 100%);
+
+/* small utility */
+.bg-seller-gradient {
+  background: linear-gradient(180deg, var(--seller-700) 0%, var(--seller-500) 100%);
+}
+
+/* card subtle */
+.card-strong {
+  box-shadow: 0 10px 30px rgba(2,6,23,0.06);
+  border-radius: 14px;
+  background: #fff;
+}
+
+/* seller button */
+.btn-seller-primary {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold;
+  background: var(--accent-amber);
+  color: #0f172a;
 }

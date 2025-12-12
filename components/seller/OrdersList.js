@@ -6,42 +6,35 @@ export default function OrdersList() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  useEffect(() => { fetchOrders(); }, []);
 
   async function fetchOrders() {
     setLoading(true);
     try {
       const token = (await supabase.auth.getSession()).data?.session?.access_token;
       const res = await fetch('/api/seller/orders', { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error('Failed to fetch');
+      if (!res.ok) throw new Error('failed');
       const json = await res.json();
       setOrders(json.orders || []);
     } catch (err) {
-      console.error('fetchOrders error', err);
+      console.error('fetchOrders', err);
       setOrders([]);
     } finally {
       setLoading(false);
     }
   }
 
-  async function markShipped(orderId) {
-    // Example: you may update order fulfillment status via admin or server endpoint
-    alert('Mark shipped - implement server endpoint to change fulfillment_status');
-  }
-
-  if (loading) return <div className="text-sm text-slate-500">Loading orders…</div>;
-  if (!orders.length) return <div className="text-sm text-slate-500">No orders containing your products yet.</div>;
+  if (loading) return <div className="text-sm text-slate-500">Loading…</div>;
+  if (orders.length === 0) return <div className="text-sm text-slate-500">No orders yet.</div>;
 
   return (
     <div className="space-y-4">
       {orders.map(o => (
-        <div key={o.id} className="card-shadow p-4 flex justify-between items-start">
+        <div key={o.id} className="card-strong p-4 flex justify-between items-start">
           <div>
-            <div className="text-sm text-slate-500">Order #{o.order_number} — {new Date(o.created_at).toLocaleString()}</div>
+            <div className="text-sm text-slate-500">Order #{o.order_number} • {new Date(o.created_at).toLocaleString()}</div>
             <div className="mt-2 font-semibold">Buyer: {o.buyer_id}</div>
-            <div className="mt-2 text-sm text-slate-600">Items (your products in this order):</div>
+            <div className="mt-3 text-sm text-slate-600">Your items:</div>
             <ul className="mt-2 space-y-1">
               {(o.items || []).map(it => (
                 <li key={it.id} className="flex items-center justify-between">
@@ -57,7 +50,7 @@ export default function OrdersList() {
 
           <div className="text-right">
             <div className="text-xs text-slate-500 mb-3">Status: {o.fulfillment_status}</div>
-            <button className="btn-secondary" onClick={() => markShipped(o.id)}>Mark shipped</button>
+            <button className="px-3 py-1 rounded-md border" onClick={() => alert('Implement update endpoint')}>Update status</button>
           </div>
         </div>
       ))}

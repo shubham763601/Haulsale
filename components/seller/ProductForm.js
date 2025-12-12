@@ -27,13 +27,15 @@ export default function ProductForm({ product = null, onClose = () => {} }) {
       });
       setVariants(product.product_variants || []);
       setImages(product.product_images || []);
+    } else {
+      setVariants([]);
+      setImages([]);
     }
   }, [product]);
 
   function update(k, v) { setForm(f => ({ ...f, [k]: v })); }
-
   function addVariant() { setVariants(v => [...v, { price: '', stock: '', moq: '', sku: '' }]); }
-  function updateVariant(i, k, v) { const c = [...variants]; c[i][k] = v; setVariants(c); }
+  function updateVariant(i,k,v) { const c = [...variants]; c[i][k] = v; setVariants(c); }
   function removeVariant(i) { setVariants(v => v.filter((_, idx) => idx !== i)); }
 
   async function saveDraft() {
@@ -45,14 +47,10 @@ export default function ProductForm({ product = null, onClose = () => {} }) {
       const url = product?.id ? `/api/seller/products/${product.id}` : '/api/seller/products';
       const method = product?.id ? 'PUT' : 'POST';
       const payload = { ...form, product_variants: variants };
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload)
-      });
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Save failed');
+        const txt = await res.text();
+        throw new Error(txt || 'Save failed');
       }
       const json = await res.json();
       alert('Saved');
@@ -67,10 +65,9 @@ export default function ProductForm({ product = null, onClose = () => {} }) {
     }
   }
 
-  async function handleImageFile(file) {
+  async function uploadImageFile(file) {
     try {
       if (!user) throw new Error('Please sign in');
-      // ensure product exists (create draft if missing)
       let productId = product?.id;
       if (!productId) {
         const created = await saveDraft();
@@ -78,22 +75,15 @@ export default function ProductForm({ product = null, onClose = () => {} }) {
         if (!productId) return;
       }
 
-      // upload to storage
       const filename = `${productId}/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-      const { data: upData, error: upErr } = await supabase.storage.from(BUCKET).upload(filename, file, { upsert: false });
-      if (upErr || !upData) throw upErr || new Error('Upload failed');
+      const { data: up, error: upErr } = await supabase.storage.from(BUCKET).upload(filename, file);
+      if (upErr) throw upErr;
 
-      // call server to insert metadata (server verifies ownership and uses service role)
+      // call server to insert metadata (server endpoint uses service role)
       const token = (await supabase.auth.getSession()).data?.session?.access_token;
-      const resp = await fetch('/api/seller/product_images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ product_id: productId, storage_path: upData.path, alt_text: file.name, position: 0 })
-      });
-      if (!resp.ok) {
-        const t = await resp.text();
-        throw new Error('Image metadata insert failed: ' + t);
-      }
+      const resp = await fetch('/api/seller/product_images', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ product_id: productId, storage_path: up.path, alt_text: file.name, position: 0 }) });
+      if (!resp.ok) throw new Error('Image metadata insert failed');
+
       const json = await resp.json();
       setImages(prev => [...prev, json.image]);
     } catch (err) {
@@ -109,7 +99,7 @@ export default function ProductForm({ product = null, onClose = () => {} }) {
           <h3 className="text-lg font-semibold">{product ? 'Edit product' : 'New product'}</h3>
           <div className="flex gap-2">
             <button onClick={() => onClose()} className="rounded-md px-3 py-1 text-sm">Close</button>
-            <button onClick={saveDraft} disabled={saving} className="rounded-md bg-amber-500 px-3 py-1 text-sm font-semibold">
+            <button onClick={saveDraft} disabled={saving} className="rounded-md bg-amber-400 px-3 py-1 text-sm font-semibold">
               {saving ? 'Saving…' : 'Save draft'}
             </button>
           </div>
@@ -123,11 +113,11 @@ export default function ProductForm({ product = null, onClose = () => {} }) {
           <input className="rounded-md border px-3 py-2" placeholder="MRP" value={form.mrp} onChange={(e) => update('mrp', e.target.value)} />
           <div>
             <label className="text-sm font-medium">Images</label>
-            <input type="file" className="mt-2" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }} />
+            <input type="file" className="mt-2" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImageFile(f); }} />
             <div className="mt-2 flex gap-2 flex-wrap">
-              {images.map((img) => (
-                <div key={img.id} className="h-16 w-16 overflow-hidden rounded-md bg-slate-100">
-                  <img src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${img.storage_path}`} className="h-full w-full object-cover" />
+              {images.map(img => (
+                <div key={img.id} className="h-16 w-16 rounded-md overflow-hidden">
+                  <img src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${img.storage_path}`} className="object-cover h-full w-full" />
                 </div>
               ))}
             </div>
@@ -140,12 +130,12 @@ export default function ProductForm({ product = null, onClose = () => {} }) {
             <button onClick={addVariant} className="text-xs text-indigo-600">Add variant</button>
           </div>
           <div className="mt-2 space-y-2">
-            {variants.map((v, i) => (
+            {variants.map((v,i) => (
               <div key={i} className="grid grid-cols-4 gap-2">
-                <input placeholder="Price" className="rounded-md border px-2" value={v.price} onChange={(e) => updateVariant(i, 'price', e.target.value)} />
-                <input placeholder="Stock" className="rounded-md border px-2" value={v.stock} onChange={(e) => updateVariant(i, 'stock', e.target.value)} />
-                <input placeholder="MOQ" className="rounded-md border px-2" value={v.moq} onChange={(e) => updateVariant(i, 'moq', e.target.value)} />
-                <input placeholder="SKU" className="rounded-md border px-2" value={v.sku} onChange={(e) => updateVariant(i, 'sku', e.target.value)} />
+                <input placeholder="Price" className="rounded-md border px-2" value={v.price} onChange={(e) => updateVariant(i,'price',e.target.value)} />
+                <input placeholder="Stock" className="rounded-md border px-2" value={v.stock} onChange={(e) => updateVariant(i,'stock',e.target.value)} />
+                <input placeholder="MOQ" className="rounded-md border px-2" value={v.moq} onChange={(e) => updateVariant(i,'moq',e.target.value)} />
+                <input placeholder="SKU" className="rounded-md border px-2" value={v.sku} onChange={(e) => updateVariant(i,'sku',e.target.value)} />
               </div>
             ))}
           </div>
