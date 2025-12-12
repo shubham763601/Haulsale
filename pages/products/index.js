@@ -195,24 +195,42 @@ export default function ProductsPage({ products, initialQ, categoryName }) {
 // ──────────────────────────
 // Server props
 // ──────────────────────────
+// ──────────────────────────
+// Server props (UPDATED — only approved & active shown publicly)
+// ──────────────────────────
 export async function getServerSideProps(ctx) {
-  const { q = '', category = '' } = ctx.query
+  const { q = '', category = '' } = ctx.query;
 
+  // base select — keep joins to variants/images
   let query = supabase
     .from('products')
     .select(`
       id,title,description,price,mrp,rating,rating_count,category_id,
       product_variants(price,stock),
-      product_images(storage_path)
+      product_images(storage_path),
+      approved,
+      is_active
     `)
+    .eq('approved', true)        // only approved products for public pages
+    .eq('is_active', true);      // only active products
 
-  if (q) query = query.ilike('title', `%${q}%`)
-  if (category) query = query.eq('category_id', category)
+  if (q) query = query.ilike('title', `%${q}%`);
 
-  const { data, error } = await query.order('created_at', { ascending: false })
+  // category may be numeric (id) — cast to integer if it looks numeric
+  if (category) {
+    const catNum = Number(category);
+    if (!Number.isNaN(catNum)) {
+      query = query.eq('category_id', catNum);
+    } else {
+      // if category is slug or name you'll need a different lookup — keep safe fallback
+      query = query.eq('category_id', category);
+    }
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
-    console.error('products page query error', error)
+    console.error('products page query error', error);
   }
 
   const products =
@@ -222,7 +240,7 @@ export async function getServerSideProps(ctx) {
       stock: p.product_variants?.[0]?.stock ?? null,
       imagePath: p.product_images?.[0]?.storage_path ?? null,
       imageUrl: makePublicUrl(p.product_images?.[0]?.storage_path),
-    })) ?? []
+    })) ?? [];
 
   return {
     props: {
@@ -230,5 +248,5 @@ export async function getServerSideProps(ctx) {
       initialQ: q || '',
       categoryName: null,
     },
-  }
+  };
 }
