@@ -10,7 +10,6 @@ const NAV = [
   { href: "/seller/settings", label: "Settings", icon: "cog" },
 ];
 
-// ---------------- ICONS ----------------
 function Icon({ name, className = "h-5 w-5" }) {
   const stroke = "currentColor";
   if (name === "home")
@@ -22,11 +21,7 @@ function Icon({ name, className = "h-5 w-5" }) {
   if (name === "box")
     return (
       <svg className={className} fill="none" viewBox="0 0 24 24">
-        <path
-          d="M21 16V8a2 2 0 0 0-1-1.7L12 2 4 6.3A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7L12 22l8-4.3A2 2 0 0 0 21 16z"
-          stroke={stroke}
-          strokeWidth="1.4"
-        />
+        <path d="M21 16V8a2 2 0 0 0-1-1.7L12 2 4 6.3A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7L12 22l8-4.3A2 2 0 0 0 21 16z" stroke={stroke} strokeWidth="1.4" />
       </svg>
     );
   if (name === "receipt")
@@ -39,17 +34,12 @@ function Icon({ name, className = "h-5 w-5" }) {
     return (
       <svg className={className} fill="none" viewBox="0 0 24 24">
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" stroke={stroke} strokeWidth="1.7" />
-        <path
-          d="M19 15l.3 1.5-1.3 1-1.5-.3-.9 1.2-1.5-.3-.6-1.4-1.5.3-1-1.3.3-1.5-1.2-.9.3-1.5 1.4-.6-.3-1.5 1.3-1 1.5.3.9-1.2 1.5.3.6 1.4 1.5-.3 1 1.3-.3 1.5 1.2.9-.3 1.5z"
-          stroke={stroke}
-          strokeWidth="1.4"
-        />
+        <path d="M19 15l.3 1.5-1.3 1-1.5-.3-.9 1.2-1.5-.3-.6-1.4-1.5.3-1-1.3.3-1.5-1.2-.9.3-1.5 1.4-.6-.3-1.5 1.3-1 1.5.3.9-1.2 1.5.3.6 1.4 1.5-.3 1 1.3-.3 1.5 1.2.9-.3 1.5z" stroke={stroke} strokeWidth="1.4" />
       </svg>
     );
   return null;
 }
 
-// ---------------- MAIN LAYOUT ----------------
 export default function SellerLayout({ children }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -58,19 +48,18 @@ export default function SellerLayout({ children }) {
     const close = () => setOpen(false);
     router.events.on("routeChangeStart", close);
     return () => router.events.off("routeChangeStart", close);
-  }, []);
+  }, [router.events]);
 
   return (
     <div className="min-h-screen flex bg-slate-50">
-
-      {/* ---------------- DESKTOP SIDEBAR ---------------- */}
-      <aside className="hidden md:flex flex-col w-72 bg-gradient-to-b from-seller-700 to-seller-500 text-white p-6 shadow-xl">
-        <div className="mb-8">
-          <div className="text-3xl font-extrabold tracking-tight">Haulcell</div>
-          <div className="text-sm mt-1 opacity-80">Seller Console</div>
+      {/* Desktop sidebar */}
+      <aside className="seller-sidebar">
+        <div className="mb-6">
+          <div className="brand-title">Haulcell</div>
+          <div className="brand-sub">Seller Console</div>
         </div>
 
-        <nav className="flex-1">
+        <nav className="flex-1 mt-4">
           <ul className="space-y-1">
             {NAV.map((n) => {
               const active = router.pathname === n.href;
@@ -78,14 +67,10 @@ export default function SellerLayout({ children }) {
                 <li key={n.href}>
                   <Link href={n.href}>
                     <a
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                        active
-                          ? "bg-white/20 shadow-sm text-white"
-                          : "text-white/90 hover:bg-white/10 hover:text-white"
-                      }`}
+                      className={`seller-nav-link ${active ? "seller-nav-link--active" : ""}`}
                     >
-                      <Icon name={n.icon} />
-                      {n.label}
+                      <Icon name={n.icon} className="h-4 w-4" />
+                      <span>{n.label}</span>
                     </a>
                   </Link>
                 </li>
@@ -94,34 +79,22 @@ export default function SellerLayout({ children }) {
           </ul>
         </nav>
 
-        <div className="text-xs opacity-80 mt-10">
-          <a href="/support" className="underline">Contact</a>
-          <div className="mt-1">© {new Date().getFullYear()} Haulcell</div>
+        <div className="mt-auto text-xs text-white/70">
+          <div className="mb-2">Need help? <a href="/support" className="underline">Contact</a></div>
+          <div>© {new Date().getFullYear()} Haulcell</div>
         </div>
       </aside>
 
-      {/* ---------------- MOBILE OVERLAY + DRAWER ---------------- */}
-      <div className={`fixed inset-0 z-40 md:hidden transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
-        <div
-          className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
-          onClick={() => setOpen(false)}
-        />
-
-        <aside
-          className={`absolute inset-y-0 left-0 w-72 bg-gradient-to-b from-seller-700 to-seller-500 text-white p-6 transform transition-transform duration-300 ${
-            open ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
+      {/* Mobile drawer */}
+      <div className="mobile-drawer" data-open={open ? "true" : "false"}>
+        <div className="mobile-drawer__overlay" onClick={() => setOpen(false)} />
+        <aside className="mobile-drawer__panel">
           <div className="mb-6 text-xl font-bold">Haulcell</div>
-
           <ul className="space-y-2">
             {NAV.map((n) => (
               <li key={n.href}>
                 <Link href={n.href}>
-                  <a
-                    onClick={() => setOpen(false)}
-                    className="block px-3 py-2 rounded-md hover:bg-white/10"
-                  >
+                  <a onClick={() => setOpen(false)} className="block px-3 py-2 rounded-md hover:bg-white/10">
                     {n.label}
                   </a>
                 </Link>
@@ -131,32 +104,32 @@ export default function SellerLayout({ children }) {
         </aside>
       </div>
 
-      {/* ---------------- MAIN AREA ---------------- */}
+      {/* Main area */}
       <div className="flex-1 flex flex-col">
-        <header className="bg-white border-b border-slate-200 shadow-sm">
+        <header className="site-header">
           <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-
             <div className="flex items-center gap-3">
-              {/* Hamburger */}
               <button
-                onClick={() => setOpen(true)}
+                onClick={() => setOpen((v) => !v)}
                 className="md:hidden p-2 rounded-lg border bg-white hover:bg-slate-50 shadow-sm"
+                aria-label="Toggle menu"
+                aria-expanded={open}
               >
-                <svg className="h-5 w-5 text-slate-700" fill="none" viewBox="0 0 24 24">
-                  <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                <svg className="h-5 w-5 text-slate-700" viewBox="0 0 24 24" fill="none">
+                  {open ? (
+                    <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                  ) : (
+                    <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                  )}
                 </svg>
               </button>
 
-              <span className="text-sm text-slate-600 hidden sm:block">
-                Seller Dashboard
-              </span>
+              <div className="text-sm text-slate-600 hidden sm:block">Seller dashboard</div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button className="px-3 py-1 border rounded-lg shadow-sm">Docs</button>
-              <button className="px-3 py-1 rounded-lg bg-amber-400 text-slate-900 font-semibold shadow-sm">
-                Account
-              </button>
+            <div className="flex items-center gap-3 header-buttons">
+              <button className="btn-ghost">Docs</button>
+              <button className="px-3 py-1 rounded-lg bg-amber-400 text-slate-900 font-semibold">Account</button>
             </div>
           </div>
         </header>
